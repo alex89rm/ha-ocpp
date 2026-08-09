@@ -113,15 +113,166 @@
         },
         "set_charge_rate_error": {
             "message": "Failed to set charging current limit: {message}"
+        },
+        "rfid_enrollment_in_progress": {
+            "message": "An RFID enrollment is already in progress for this charger"
+        }
+    },
+    "entity": {
+        "button": {
+            "learn_rfid": {
+                "name": "Learn RFID"
+            }
         }
     },
     "options": {
         "step": {
             "init": {
-                "title": "OCPP Charger Configuration",
-                "description": "Select the charge point to edit.",
+                "title": "OCPP Configuration",
+                "description": "Select charger settings or manage central authorization.",
                 "data": {
-                    "cp_id": "Charge point"
+                    "target": "Configuration target"
+                }
+            },
+            "authorization": {
+                "title": "Authorization and RFID cards",
+                "description": "Manage the authorization policy, users, and RFID credentials for this central system.",
+                "menu_options": {
+                    "auth_settings": "Authorization policy",
+                    "auth_add_user": "Add user",
+                    "auth_select_user": "Manage user",
+                    "auth_select_pending": "Unassigned RFID scans",
+                    "auth_finish": "Finish"
+                }
+            },
+            "auth_settings": {
+                "title": "Authorization policy",
+                "description": "When enabled, only enabled credentials assigned to enabled users are accepted. Home Assistant remote starts remain available.",
+                "data": {
+                    "authorization_required": "Allow only registered credentials"
+                }
+            },
+            "auth_add_user": {
+                "title": "Add authorization user",
+                "data": {
+                    "name": "Name",
+                    "enabled": "Enabled"
+                }
+            },
+            "auth_select_user": {
+                "title": "Manage authorization user",
+                "data": {
+                    "user_id": "User"
+                }
+            },
+            "auth_user": {
+                "title": "Authorization user",
+                "description": "Managing {user}.",
+                "menu_options": {
+                    "auth_edit_user": "Edit user",
+                    "auth_learn_card": "Add RFID card",
+                    "auth_select_card": "Manage RFID card",
+                    "auth_delete_user": "Delete user",
+                    "auth_back": "Back"
+                }
+            },
+            "auth_edit_user": {
+                "title": "Edit authorization user",
+                "description": "Editing {user}.",
+                "data": {
+                    "name": "Name",
+                    "enabled": "Enabled"
+                }
+            },
+            "auth_delete_user": {
+                "title": "Delete authorization user",
+                "description": "Delete {user} and all RFID cards assigned to this user?",
+                "data": {
+                    "confirm": "Confirm deletion"
+                }
+            },
+            "auth_learn_card": {
+                "title": "Add RFID card",
+                "description": "Choose the charger whose RFID reader will be used.",
+                "data": {
+                    "charge_point": "Charger",
+                    "label": "Card label"
+                }
+            },
+            "auth_enrollment_timeout": {
+                "title": "RFID enrollment timed out",
+                "description": "No card was read within 60 seconds. Continue to return to the user.",
+                "data": {}
+            },
+            "auth_confirm_card": {
+                "title": "Confirm RFID card",
+                "description": "Card {card} was read for {user}. Current owner: {assigned_user}. The learning scan was rejected and cannot start a charge.",
+                "data": {
+                    "label": "Card label",
+                    "enabled": "Enabled",
+                    "authorization_status": "Authorization status",
+                    "transfer": "Transfer from the current user"
+                }
+            },
+            "auth_select_card": {
+                "title": "Select RFID card",
+                "data": {
+                    "credential_id": "RFID card"
+                }
+            },
+            "auth_card": {
+                "title": "RFID card",
+                "description": "Managing {card}.",
+                "menu_options": {
+                    "auth_edit_card": "Edit card",
+                    "auth_delete_card": "Delete card",
+                    "auth_user": "Back to user"
+                }
+            },
+            "auth_edit_card": {
+                "title": "Edit RFID card",
+                "description": "Card identifier: {card}.",
+                "data": {
+                    "label": "Card label",
+                    "enabled": "Enabled",
+                    "authorization_status": "Authorization status"
+                }
+            },
+            "auth_delete_card": {
+                "title": "Delete RFID card",
+                "description": "Delete card {card}?",
+                "data": {
+                    "confirm": "Confirm deletion"
+                }
+            },
+            "auth_select_pending": {
+                "title": "Unassigned RFID scans",
+                "data": {
+                    "pending_id": "RFID scan"
+                }
+            },
+            "auth_pending": {
+                "title": "Unassigned RFID scan",
+                "description": "Card {card} was read by {charger}.",
+                "menu_options": {
+                    "auth_assign_pending": "Assign to user",
+                    "auth_discard_pending": "Discard scan",
+                    "auth_back": "Back"
+                }
+            },
+            "auth_assign_pending": {
+                "title": "Assign RFID card",
+                "description": "Assign card {card} to a user.",
+                "data": {
+                    "user_id": "User",
+                    "label": "Card label"
+                }
+            },
+            "auth_discard_pending": {
+                "title": "Discard RFID scan",
+                "description": "Discard card {card}? It will not be assigned to a user.",
+                "data": {
+                    "confirm": "Confirm discard"
                 }
             },
             "cp_settings": {
@@ -166,7 +317,14 @@
             }
         },
         "error": {
-            "no_measurands_selected": "No measurand selected: please select at least one"
+            "no_measurands_selected": "No measurand selected: please select at least one",
+            "duplicate_user_name": "A user with this name already exists",
+            "credential_already_assigned": "This card belongs to another user. Confirm the transfer to continue.",
+            "rfid_enrollment_in_progress": "An RFID enrollment is already active for this charger",
+            "no_charge_points": "Configure a charger before learning an RFID card"
+        },
+        "progress": {
+            "auth_wait_for_card": "Present an RFID card to {charger} within {seconds} seconds. This learning scan will not start a charge."
         },
         "abort": {
             "no_charge_points": "No charge point has connected to this central system yet, so there is nothing to configure."

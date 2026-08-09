@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, UTC
 import logging
 
 import time
+from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -24,6 +25,7 @@ from ocpp.v16.enums import (
     ChargingProfileStatus,
     ChargingRateUnitType,
     ClearChargingProfileStatus,
+    ClearCacheStatus,
     ConfigurationStatus,
     DataTransferStatus,
     Measurand,
@@ -60,6 +62,9 @@ from .const import (
     MEASURANDS,
 )
 
+if TYPE_CHECKING:
+    from .authorization import AuthorizationManager
+
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
 
@@ -89,6 +94,7 @@ class ChargePoint(cp):
         entry: ConfigEntry,
         central: CentralSystemSettings,
         charger: ChargerSystemSettings,
+        authorization: AuthorizationManager | None = None,
     ):
         """Instantiate a ChargePoint."""
 
@@ -100,6 +106,7 @@ class ChargePoint(cp):
             entry,
             central,
             charger,
+            authorization,
         )
         self._active_tx: dict[int, int] = {}  # connector_id -> transaction_id
 
@@ -147,6 +154,11 @@ class ChargePoint(cp):
     async def get_heartbeat_interval(self):
         """Retrieve heartbeat interval from the charger and store it."""
         await self.get_configuration(ckey.heartbeat_interval.value)
+
+    async def clear_authorization_cache(self) -> bool:
+        """Clear authorization data cached by the charger."""
+        response = await self.call(call.ClearCache())
+        return response.status == ClearCacheStatus.accepted.value
 
     async def get_supported_measurands(self) -> str:
         """Get comma-separated list of measurands supported by the charger."""

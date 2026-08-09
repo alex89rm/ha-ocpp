@@ -22,6 +22,7 @@ from websockets.asyncio.server import ServerConnection
 from .ocppv16 import ChargePoint as ChargePointv16
 from .ocppv201 import ChargePoint as ChargePointv201
 
+from .authorization import AuthorizationManager
 from .const import (
     CentralSystemSettings,
     DOMAIN,
@@ -110,6 +111,7 @@ class CentralSystem:
         self.charge_points = {}  # uses cp_id as reference to charger instance
         self.cpids = {}  # dict of {cpid:cp_id}
         self.connections = 0
+        self.authorization = AuthorizationManager(hass, entry)
 
         # Register custom services with home assistant
         self.hass.services.async_register(
@@ -166,6 +168,7 @@ class CentralSystem:
     async def create(hass: HomeAssistant, entry: ConfigEntry):
         """Create instance and start listening for OCPP connections on given port."""
         self = CentralSystem(hass, entry)
+        await self.authorization.async_load()
 
         if self.settings.ssl:
             self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -279,10 +282,22 @@ class CentralSystem:
         """Construct the ChargePoint matching this connection's subprotocol."""
         if websocket.subprotocol and websocket.subprotocol.startswith(OCPP_2_0):
             return ChargePointv201(
-                cp_id, websocket, self.hass, self.entry, self.settings, cp_settings
+                cp_id,
+                websocket,
+                self.hass,
+                self.entry,
+                self.settings,
+                cp_settings,
+                self.authorization,
             )
         return ChargePointv16(
-            cp_id, websocket, self.hass, self.entry, self.settings, cp_settings
+            cp_id,
+            websocket,
+            self.hass,
+            self.entry,
+            self.settings,
+            cp_settings,
+            self.authorization,
         )
 
     async def on_connect(self, websocket: ServerConnection):
@@ -640,6 +655,29 @@ class CentralSystem:
         if cp_id in self.charge_points:
             return self.charge_points[cp_id].supported_features
         return 0
+
+    async def start_rfid_enrollment(self, id: str) -> bool:
+        """Arm a safe, one-minute RFID enrollment window for a charger."""
+        cp_id = self.cpids.get(id, id)
+        if cp_id not in self.charge_points:
+            return False
+        self.authorization.start_enrollment(cp_id, notify=True)
+        return True
+
+    async def clear_authorization_cache(self, id: str) -> bool:
+        """Clear a charger's authorization cache after assigning a credential."""
+        cp_id = self.cpids.get(id, id)
+        if cp_id not in self.charge_points:
+            return False
+        try:
+            return await self.charge_points[cp_id].clear_authorization_cache()
+        except Exception:
+            _LOGGER.debug(
+                "Unable to clear authorization cache for charger %s",
+                cp_id,
+                exc_info=True,
+            )
+            return False
 
     async def set_max_charge_rate_amps(
         self, id: str, value: float, connector_id: int = 0

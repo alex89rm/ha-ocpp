@@ -1,0 +1,175 @@
+{
+    "exceptions": {
+        "rfid_enrollment_in_progress": {
+            "message": "È già in corso un apprendimento RFID per questa wallbox"
+        }
+    },
+    "entity": {
+        "button": {
+            "learn_rfid": {
+                "name": "Apprendi RFID"
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Configurazione OCPP",
+                "description": "Seleziona le impostazioni della wallbox oppure gestisci l'autorizzazione centrale.",
+                "data": {
+                    "target": "Elemento da configurare"
+                }
+            },
+            "authorization": {
+                "title": "Autorizzazione e tessere RFID",
+                "description": "Gestisci la policy di autorizzazione, gli utenti e le tessere RFID di questo Central System.",
+                "menu_options": {
+                    "auth_settings": "Policy di autorizzazione",
+                    "auth_add_user": "Aggiungi utente",
+                    "auth_select_user": "Gestisci utente",
+                    "auth_select_pending": "Tessere RFID non assegnate",
+                    "auth_finish": "Termina"
+                }
+            },
+            "auth_settings": {
+                "title": "Policy di autorizzazione",
+                "description": "Quando è attiva vengono accettate solamente le tessere abilitate associate a utenti abilitati. Gli avvii remoti da Home Assistant rimangono disponibili.",
+                "data": {
+                    "authorization_required": "Consenti solamente le tessere registrate"
+                }
+            },
+            "auth_add_user": {
+                "title": "Aggiungi utente autorizzato",
+                "data": {
+                    "name": "Nome",
+                    "enabled": "Abilitato"
+                }
+            },
+            "auth_select_user": {
+                "title": "Gestisci utente autorizzato",
+                "data": {
+                    "user_id": "Utente"
+                }
+            },
+            "auth_user": {
+                "title": "Utente autorizzato",
+                "description": "Gestione di {user}.",
+                "menu_options": {
+                    "auth_edit_user": "Modifica utente",
+                    "auth_learn_card": "Aggiungi tessera RFID",
+                    "auth_select_card": "Gestisci tessera RFID",
+                    "auth_delete_user": "Elimina utente",
+                    "auth_back": "Indietro"
+                }
+            },
+            "auth_edit_user": {
+                "title": "Modifica utente autorizzato",
+                "description": "Modifica di {user}.",
+                "data": {
+                    "name": "Nome",
+                    "enabled": "Abilitato"
+                }
+            },
+            "auth_delete_user": {
+                "title": "Elimina utente autorizzato",
+                "description": "Eliminare {user} e tutte le tessere RFID associate?",
+                "data": {
+                    "confirm": "Conferma eliminazione"
+                }
+            },
+            "auth_learn_card": {
+                "title": "Aggiungi tessera RFID",
+                "description": "Scegli la wallbox il cui lettore RFID verrà utilizzato.",
+                "data": {
+                    "charge_point": "Wallbox",
+                    "label": "Etichetta tessera"
+                }
+            },
+            "auth_enrollment_timeout": {
+                "title": "Tempo di apprendimento RFID scaduto",
+                "description": "Nessuna tessera è stata letta entro 60 secondi. Continua per tornare all'utente.",
+                "data": {}
+            },
+            "auth_confirm_card": {
+                "title": "Conferma tessera RFID",
+                "description": "La tessera {card} è stata letta per {user}. Proprietario attuale: {assigned_user}. La scansione di apprendimento è stata rifiutata e non può avviare una ricarica.",
+                "data": {
+                    "label": "Etichetta tessera",
+                    "enabled": "Abilitata",
+                    "authorization_status": "Stato di autorizzazione",
+                    "transfer": "Trasferisci dal proprietario attuale"
+                }
+            },
+            "auth_select_card": {
+                "title": "Seleziona tessera RFID",
+                "data": {
+                    "credential_id": "Tessera RFID"
+                }
+            },
+            "auth_card": {
+                "title": "Tessera RFID",
+                "description": "Gestione di {card}.",
+                "menu_options": {
+                    "auth_edit_card": "Modifica tessera",
+                    "auth_delete_card": "Elimina tessera",
+                    "auth_user": "Torna all'utente"
+                }
+            },
+            "auth_edit_card": {
+                "title": "Modifica tessera RFID",
+                "description": "Identificativo tessera: {card}.",
+                "data": {
+                    "label": "Etichetta tessera",
+                    "enabled": "Abilitata",
+                    "authorization_status": "Stato di autorizzazione"
+                }
+            },
+            "auth_delete_card": {
+                "title": "Elimina tessera RFID",
+                "description": "Eliminare la tessera {card}?",
+                "data": {
+                    "confirm": "Conferma eliminazione"
+                }
+            },
+            "auth_select_pending": {
+                "title": "Tessere RFID non assegnate",
+                "data": {
+                    "pending_id": "Lettura RFID"
+                }
+            },
+            "auth_pending": {
+                "title": "Tessera RFID non assegnata",
+                "description": "La tessera {card} è stata letta da {charger}.",
+                "menu_options": {
+                    "auth_assign_pending": "Associa a un utente",
+                    "auth_discard_pending": "Scarta lettura",
+                    "auth_back": "Indietro"
+                }
+            },
+            "auth_assign_pending": {
+                "title": "Associa tessera RFID",
+                "description": "Associa la tessera {card} a un utente.",
+                "data": {
+                    "user_id": "Utente",
+                    "label": "Etichetta tessera"
+                }
+            },
+            "auth_discard_pending": {
+                "title": "Scarta lettura RFID",
+                "description": "Scartare la tessera {card}? Non verrà associata a un utente.",
+                "data": {
+                    "confirm": "Conferma eliminazione"
+                }
+            }
+        },
+        "error": {
+            "duplicate_user_name": "Esiste già un utente con questo nome",
+            "credential_already_assigned": "Questa tessera appartiene a un altro utente. Conferma il trasferimento per continuare.",
+            "rfid_enrollment_in_progress": "È già attivo un apprendimento RFID per questa wallbox",
+            "no_charge_points": "Configura una wallbox prima di apprendere una tessera RFID"
+        },
+        "progress": {
+            "auth_wait_for_card": "Avvicina una tessera RFID a {charger} entro {seconds} secondi. Questa scansione di apprendimento non avvierà una ricarica."
+        }
+    }
+}

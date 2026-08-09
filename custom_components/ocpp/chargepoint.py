@@ -10,6 +10,7 @@ from math import sqrt
 import secrets
 import string
 import time
+from typing import TYPE_CHECKING
 
 from homeassistant.components.persistent_notification import DOMAIN as PN_DOMAIN
 from homeassistant.config_entries import ConfigEntry
@@ -65,6 +66,9 @@ from .const import (
     HA_POWER_UNIT,
     UNITS_OCCP_TO_HA,
 )
+
+if TYPE_CHECKING:
+    from .authorization import AuthorizationManager
 
 TIME_MINUTES = UnitOfTime.MINUTES
 _LOGGER: logging.Logger = logging.getLogger(__package__)
@@ -233,6 +237,7 @@ class ChargePoint(cp):
         entry: ConfigEntry,
         central: CentralSystemSettings,
         charger: ChargerSystemSettings,
+        authorization: AuthorizationManager | None = None,
     ):
         """Instantiate a ChargePoint."""
 
@@ -259,6 +264,7 @@ class ChargePoint(cp):
         self.entry = entry
         self.cs_settings = central
         self.settings = charger
+        self.authorization = authorization
         self.status = "init"
         # Indicates if the charger requires a reboot to apply new
         # configuration.
@@ -458,6 +464,10 @@ class ChargePoint(cp):
         """Configure charger by setting the key to target value."""
         return None
 
+    async def clear_authorization_cache(self) -> bool:
+        """Clear authorization data cached by the charger."""
+        return False
+
     async def _get_specific_response(self, unique_id, timeout):
         # The ocpp library silences CallErrors by default. See
         # https://github.com/mobilityhouse/ocpp/issues/104.
@@ -648,13 +658,23 @@ class ChargePoint(cp):
         # authorize if its the tag of this charger used for remote start_transaction
         if id_tag == self._remote_id_tag:
             return AuthorizationStatus.accepted.value
+
+        if self.authorization is not None:
+            if self.authorization.capture_for_enrollment(self.id, id_tag):
+                return AuthorizationStatus.invalid.value
+            return self.authorization.authorization_status(id_tag, self.id)
+
+        # Directly-created charge points retain the legacy YAML fallback. In
+        # normal integration setup CentralSystem always supplies the manager.
         config = self.hass.data[DOMAIN].get(CONFIG, {})
         # get the default authorization status. Use accept if not configured
         default_auth_status = config.get(
             CONF_DEFAULT_AUTH_STATUS, AuthorizationStatus.accepted.value
         )
         # get the authorization list
-        auth_list = config.get(CONF_AUTH_LIST, {})
+        auth_list = config.get(CONF_AUTH_LIST, [])
+        if isinstance(auth_list, dict):
+            auth_list = list(auth_list.values())
         # search for the entry, based on the id_tag
         auth_status = None
         for auth_entry in auth_list:
@@ -662,16 +682,12 @@ class ChargePoint(cp):
             if id_tag == id_entry:
                 # get the authorization status, use the default if not configured
                 auth_status = auth_entry.get(CONF_AUTH_STATUS, default_auth_status)
-                _LOGGER.debug(
-                    f"id_tag='{id_tag}' found in auth_list, authorization_status='{auth_status}'"
-                )
+                _LOGGER.debug("Credential found in legacy authorization list")
                 break
 
         if auth_status is None:
             auth_status = default_auth_status
-            _LOGGER.debug(
-                f"id_tag='{id_tag}' not found in auth_list, default authorization_status='{auth_status}'"
-            )
+            _LOGGER.debug("Credential not found in legacy authorization list")
         return auth_status
 
     def process_phases(self, data: list[MeasurandValue], connector_id: int = 0):

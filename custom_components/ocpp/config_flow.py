@@ -1,5 +1,7 @@
 """Adds config flow for ocpp."""
 
+import asyncio
+import contextlib
 from typing import Any
 from homeassistant.config_entries import (
     ConfigEntry,
@@ -12,7 +14,21 @@ from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
 import voluptuous as vol
 
+from ocpp.v16.enums import AuthorizationStatus
+
+from .authorization import (
+    AUTHORIZATION_STATUSES,
+    AuthorizationManager,
+    CredentialAlreadyAssignedError,
+    DuplicateUserNameError,
+    EnrollmentInProgressError,
+    EnrollmentResult,
+    UnknownAuthorizationRecordError,
+    mask_token,
+)
 from .const import (
+    CONF_AUTHORIZATION_REQUIRED,
+    CONF_AUTH_STATUS,
     CONF_CPID,
     CONF_CPIDS,
     CONF_CSID,
@@ -21,6 +37,7 @@ from .const import (
     CONF_IDLE_INTERVAL,
     CONF_MAX_CURRENT,
     CONF_METER_INTERVAL,
+    CONF_NAME,
     CONF_MONITORED_VARIABLES,
     CONF_MONITORED_VARIABLES_AUTOCONFIG,
     CONF_NUM_CONNECTORS,
@@ -111,6 +128,18 @@ STEP_USER_MEASURANDS_SCHEMA = vol.Schema(
         for m in MEASURANDS
     }
 )
+
+OPTIONS_TARGET = "target"
+OPTIONS_TARGET_AUTHORIZATION = "__authorization__"
+
+AUTH_ENABLED = "enabled"
+AUTH_LABEL = "label"
+AUTH_CONFIRM = "confirm"
+AUTH_TRANSFER = "transfer"
+AUTH_USER_ID = "user_id"
+AUTH_CREDENTIAL_ID = "credential_id"
+AUTH_PENDING_ID = "pending_id"
+AUTH_CHARGE_POINT = "charge_point"
 
 
 class ConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -338,6 +367,30 @@ class OCPPOptionsFlow(OptionsFlow):
         """Initialize."""
         self._cp_id: str = ""
         self._settings: dict[str, Any] = {}
+        self._auth_manager: AuthorizationManager | None = None
+        self._auth_user_id: str = ""
+        self._auth_credential_id: str = ""
+        self._auth_pending_id: str = ""
+        self._auth_enrollment_cp_id: str = ""
+        self._auth_enrollment_label: str = ""
+        self._auth_enrollment_task: asyncio.Task[EnrollmentResult] | None = None
+        self._auth_enrollment_result: EnrollmentResult | None = None
+
+    async def _get_auth_manager(self) -> AuthorizationManager:
+        """Return the loaded manager belonging to this options flow."""
+        if self._auth_manager is not None:
+            return self._auth_manager
+        central = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        if central is not None:
+            self._auth_manager = central.authorization
+        else:
+            self._auth_manager = AuthorizationManager(self.hass, self.config_entry)
+            await self._auth_manager.async_load()
+        return self._auth_manager
+
+    def _loaded_central_system(self):
+        """Return the loaded central system, if available."""
+        return self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
 
     def _charge_points(self) -> dict[str, dict[str, Any]]:
         """Map cp_id to its stored settings for this entry."""
@@ -380,22 +433,561 @@ class OCPPOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Pick which charge point to edit, when there is a choice."""
+        """Pick charger settings or central authorization management."""
         points = self._charge_points()
-        if not points:
-            return self.async_abort(reason="no_charge_points")
 
         if user_input is not None:
-            self._cp_id = user_input["cp_id"]
+            target = user_input[OPTIONS_TARGET]
+            if target == OPTIONS_TARGET_AUTHORIZATION:
+                return await self.async_step_authorization()
+            self._cp_id = target
             return await self.async_step_cp_settings()
 
-        if len(points) == 1:
-            self._cp_id = next(iter(points))
-            return await self.async_step_cp_settings()
+        targets = {
+            OPTIONS_TARGET_AUTHORIZATION: "Authorization and RFID cards",
+            **{
+                cp_id: f"Charger {settings[CONF_CPID]} ({cp_id})"
+                for cp_id, settings in sorted(points.items())
+            },
+        }
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema({vol.Required("cp_id"): vol.In(sorted(points))}),
+            data_schema=vol.Schema({vol.Required(OPTIONS_TARGET): vol.In(targets)}),
+        )
+
+    async def async_step_authorization(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show authorization management actions."""
+        manager = await self._get_auth_manager()
+        menu_options = ["auth_settings", "auth_add_user"]
+        if manager.users:
+            menu_options.append("auth_select_user")
+        if manager.pending_credentials:
+            menu_options.append("auth_select_pending")
+        menu_options.append("auth_finish")
+        return self.async_show_menu(step_id="authorization", menu_options=menu_options)
+
+    async def async_step_auth_finish(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Finish authorization management without reloading OCPP."""
+        return self.async_create_entry(data={})
+
+    async def async_step_auth_back(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Return to the authorization menu."""
+        return await self.async_step_authorization()
+
+    async def async_step_auth_settings(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Configure the policy applied to unknown credentials."""
+        manager = await self._get_auth_manager()
+        if user_input is not None:
+            policy_changed = (
+                manager.registered_only != user_input[CONF_AUTHORIZATION_REQUIRED]
+            )
+            await manager.async_set_registered_only(
+                user_input[CONF_AUTHORIZATION_REQUIRED]
+            )
+            if policy_changed:
+                await self._async_clear_authorization_caches()
+            return await self.async_step_authorization()
+        return self.async_show_form(
+            step_id="auth_settings",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_AUTHORIZATION_REQUIRED,
+                        default=manager.registered_only,
+                    ): bool
+                }
+            ),
+        )
+
+    async def async_step_auth_add_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Create an authorization user."""
+        manager = await self._get_auth_manager()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                self._auth_user_id = await manager.async_add_user(
+                    user_input[CONF_NAME], user_input[AUTH_ENABLED]
+                )
+            except DuplicateUserNameError:
+                errors[CONF_NAME] = "duplicate_user_name"
+            else:
+                return await self.async_step_auth_user()
+        return self.async_show_form(
+            step_id="auth_add_user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_NAME): cv.string,
+                    vol.Required(AUTH_ENABLED, default=True): bool,
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_auth_select_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Select a user to manage."""
+        manager = await self._get_auth_manager()
+        users = manager.users
+        if not users:
+            return await self.async_step_authorization()
+        if user_input is not None:
+            self._auth_user_id = user_input[AUTH_USER_ID]
+            return await self.async_step_auth_user()
+        choices = {user_id: user["name"] for user_id, user in sorted(users.items())}
+        return self.async_show_form(
+            step_id="auth_select_user",
+            data_schema=vol.Schema({vol.Required(AUTH_USER_ID): vol.In(choices)}),
+        )
+
+    async def async_step_auth_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show actions for the selected user."""
+        manager = await self._get_auth_manager()
+        user = manager.users.get(self._auth_user_id)
+        if user is None:
+            return await self.async_step_authorization()
+        menu_options = ["auth_edit_user", "auth_learn_card"]
+        if user["credentials"]:
+            menu_options.append("auth_select_card")
+        menu_options.extend(["auth_delete_user", "auth_back"])
+        return self.async_show_menu(
+            step_id="auth_user",
+            menu_options=menu_options,
+            description_placeholders={"user": user["name"]},
+        )
+
+    async def async_step_auth_edit_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit the selected user."""
+        manager = await self._get_auth_manager()
+        user = manager.users.get(self._auth_user_id)
+        if user is None:
+            return await self.async_step_authorization()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            enabled_changed = user["enabled"] != user_input[AUTH_ENABLED]
+            try:
+                await manager.async_update_user(
+                    self._auth_user_id,
+                    user_input[CONF_NAME],
+                    user_input[AUTH_ENABLED],
+                )
+            except DuplicateUserNameError:
+                errors[CONF_NAME] = "duplicate_user_name"
+            else:
+                if enabled_changed:
+                    await self._async_clear_authorization_caches()
+                return await self.async_step_auth_user()
+        return self.async_show_form(
+            step_id="auth_edit_user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_NAME, default=user["name"]): cv.string,
+                    vol.Required(AUTH_ENABLED, default=user["enabled"]): bool,
+                }
+            ),
+            errors=errors,
+            description_placeholders={"user": user["name"]},
+        )
+
+    async def async_step_auth_delete_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Delete a user only after explicit confirmation."""
+        manager = await self._get_auth_manager()
+        user = manager.users.get(self._auth_user_id)
+        if user is None:
+            return await self.async_step_authorization()
+        if user_input is not None:
+            if user_input[AUTH_CONFIRM]:
+                await manager.async_delete_user(self._auth_user_id)
+                if user["credentials"]:
+                    await self._async_clear_authorization_caches()
+                self._auth_user_id = ""
+                return await self.async_step_authorization()
+            return await self.async_step_auth_user()
+        return self.async_show_form(
+            step_id="auth_delete_user",
+            data_schema=vol.Schema({vol.Required(AUTH_CONFIRM, default=False): bool}),
+            description_placeholders={"user": user["name"]},
+        )
+
+    async def async_step_auth_learn_card(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Start an RFID enrollment session for the selected user."""
+        manager = await self._get_auth_manager()
+        points = self._charge_points()
+        errors: dict[str, str] = {}
+        if not points:
+            return self.async_show_form(
+                step_id="auth_learn_card",
+                data_schema=vol.Schema({}),
+                errors={"base": "no_charge_points"},
+            )
+        if user_input is not None:
+            self._auth_enrollment_cp_id = user_input[AUTH_CHARGE_POINT]
+            self._auth_enrollment_label = user_input.get(AUTH_LABEL, "")
+            try:
+                enrollment = manager.start_enrollment(self._auth_enrollment_cp_id)
+            except EnrollmentInProgressError:
+                errors["base"] = "rfid_enrollment_in_progress"
+            else:
+
+                async def _wait_for_card() -> EnrollmentResult:
+                    return await enrollment
+
+                self._auth_enrollment_task = self.hass.async_create_task(
+                    _wait_for_card()
+                )
+                return await self.async_step_auth_wait_for_card()
+
+        choices = {
+            cp_id: f"{settings[CONF_CPID]} ({cp_id})"
+            for cp_id, settings in sorted(points.items())
+        }
+        return self.async_show_form(
+            step_id="auth_learn_card",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(AUTH_CHARGE_POINT): vol.In(choices),
+                    vol.Optional(AUTH_LABEL, default=""): cv.string,
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_auth_wait_for_card(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Wait until the charger reports the next RFID token."""
+        task = self._auth_enrollment_task
+        if task is None:
+            return await self.async_step_auth_user()
+        if not task.done():
+            return self.async_show_progress(
+                step_id="auth_wait_for_card",
+                progress_action="auth_wait_for_card",
+                progress_task=task,
+                description_placeholders={
+                    "charger": self._auth_enrollment_cp_id,
+                    "seconds": "60",
+                },
+            )
+        try:
+            self._auth_enrollment_result = task.result()
+        except (TimeoutError, asyncio.CancelledError):
+            self._auth_enrollment_task = None
+            return self.async_show_progress_done(next_step_id="auth_enrollment_timeout")
+        self._auth_enrollment_task = None
+        return self.async_show_progress_done(next_step_id="auth_confirm_card")
+
+    async def async_step_auth_enrollment_timeout(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Report an enrollment timeout and return to the user menu."""
+        if user_input is not None:
+            return await self.async_step_auth_user()
+        return self.async_show_form(
+            step_id="auth_enrollment_timeout", data_schema=vol.Schema({})
+        )
+
+    async def _async_clear_authorization_caches(self) -> None:
+        """Best-effort removal of stale authorization responses from chargers."""
+        central = self._loaded_central_system()
+        if central is None:
+            return
+
+        async def _clear(cp_id: str) -> None:
+            try:
+                await asyncio.wait_for(
+                    central.clear_authorization_cache(cp_id), timeout=10
+                )
+            except TimeoutError:
+                return
+
+        await asyncio.gather(*(_clear(cp_id) for cp_id in central.charge_points))
+
+    async def async_step_auth_confirm_card(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Confirm and persist a captured RFID credential."""
+        manager = await self._get_auth_manager()
+        result = self._auth_enrollment_result
+        users = manager.users
+        user = users.get(self._auth_user_id)
+        if result is None or user is None:
+            return await self.async_step_authorization()
+
+        assigned_user = users.get(result.assigned_user_id or "")
+        assigned_name = assigned_user["name"] if assigned_user else ""
+        transfer_required = bool(
+            result.assigned_user_id and result.assigned_user_id != self._auth_user_id
+        )
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                await manager.async_assign_token(
+                    self._auth_user_id,
+                    result.token,
+                    label=user_input[AUTH_LABEL],
+                    enabled=user_input[AUTH_ENABLED],
+                    authorization_status=user_input[CONF_AUTH_STATUS],
+                    transfer=user_input.get(AUTH_TRANSFER, False),
+                )
+            except CredentialAlreadyAssignedError:
+                errors["base"] = "credential_already_assigned"
+            else:
+                await self._async_clear_authorization_caches()
+                self._auth_enrollment_result = None
+                return await self.async_step_auth_user()
+
+        fields: dict[Any, Any] = {
+            vol.Required(AUTH_LABEL, default=self._auth_enrollment_label): cv.string,
+            vol.Required(AUTH_ENABLED, default=True): bool,
+            vol.Required(
+                CONF_AUTH_STATUS,
+                default=AuthorizationStatus.accepted.value,
+            ): vol.In(AUTHORIZATION_STATUSES),
+        }
+        if transfer_required:
+            fields[vol.Required(AUTH_TRANSFER, default=False)] = bool
+        return self.async_show_form(
+            step_id="auth_confirm_card",
+            data_schema=vol.Schema(fields),
+            errors=errors,
+            description_placeholders={
+                "card": mask_token(result.token),
+                "user": user["name"],
+                "assigned_user": assigned_name,
+            },
+        )
+
+    async def async_step_auth_select_card(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Select one credential belonging to the active user."""
+        manager = await self._get_auth_manager()
+        user = manager.users.get(self._auth_user_id)
+        if user is None or not user["credentials"]:
+            return await self.async_step_auth_user()
+        if user_input is not None:
+            self._auth_credential_id = user_input[AUTH_CREDENTIAL_ID]
+            return await self.async_step_auth_card()
+        choices = {
+            credential["id"]: (credential["label"] or mask_token(credential["token"]))
+            for credential in user["credentials"]
+        }
+        return self.async_show_form(
+            step_id="auth_select_card",
+            data_schema=vol.Schema({vol.Required(AUTH_CREDENTIAL_ID): vol.In(choices)}),
+        )
+
+    async def async_step_auth_card(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show actions for a selected credential."""
+        credential = self._selected_credential()
+        if credential is None:
+            return await self.async_step_auth_user()
+        return self.async_show_menu(
+            step_id="auth_card",
+            menu_options=["auth_edit_card", "auth_delete_card", "auth_user"],
+            description_placeholders={
+                "card": credential["label"] or mask_token(credential["token"])
+            },
+        )
+
+    def _selected_credential(self) -> dict[str, Any] | None:
+        """Return the currently selected credential from a fresh snapshot."""
+        if self._auth_manager is None:
+            return None
+        user = self._auth_manager.users.get(self._auth_user_id)
+        if user is None:
+            return None
+        return next(
+            (
+                credential
+                for credential in user["credentials"]
+                if credential["id"] == self._auth_credential_id
+            ),
+            None,
+        )
+
+    async def async_step_auth_edit_card(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit a credential."""
+        manager = await self._get_auth_manager()
+        credential = self._selected_credential()
+        if credential is None:
+            return await self.async_step_auth_user()
+        if user_input is not None:
+            authorization_changed = (
+                credential["enabled"] != user_input[AUTH_ENABLED]
+                or credential["authorization_status"] != user_input[CONF_AUTH_STATUS]
+            )
+            await manager.async_update_credential(
+                self._auth_credential_id,
+                label=user_input[AUTH_LABEL],
+                enabled=user_input[AUTH_ENABLED],
+                authorization_status=user_input[CONF_AUTH_STATUS],
+            )
+            if authorization_changed:
+                await self._async_clear_authorization_caches()
+            return await self.async_step_auth_card()
+        return self.async_show_form(
+            step_id="auth_edit_card",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(AUTH_LABEL, default=credential["label"]): cv.string,
+                    vol.Required(AUTH_ENABLED, default=credential["enabled"]): bool,
+                    vol.Required(
+                        CONF_AUTH_STATUS,
+                        default=credential["authorization_status"],
+                    ): vol.In(AUTHORIZATION_STATUSES),
+                }
+            ),
+            description_placeholders={"card": mask_token(credential["token"])},
+        )
+
+    async def async_step_auth_delete_card(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Delete a credential after confirmation."""
+        manager = await self._get_auth_manager()
+        credential = self._selected_credential()
+        if credential is None:
+            return await self.async_step_auth_user()
+        if user_input is not None:
+            if user_input[AUTH_CONFIRM]:
+                await manager.async_delete_credential(self._auth_credential_id)
+                await self._async_clear_authorization_caches()
+                self._auth_credential_id = ""
+                return await self.async_step_auth_user()
+            return await self.async_step_auth_card()
+        return self.async_show_form(
+            step_id="auth_delete_card",
+            data_schema=vol.Schema({vol.Required(AUTH_CONFIRM, default=False): bool}),
+            description_placeholders={"card": mask_token(credential["token"])},
+        )
+
+    async def async_step_auth_select_pending(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Select an unassigned RFID scan."""
+        manager = await self._get_auth_manager()
+        pending = manager.pending_credentials
+        if not pending:
+            return await self.async_step_authorization()
+        if user_input is not None:
+            self._auth_pending_id = user_input[AUTH_PENDING_ID]
+            return await self.async_step_auth_pending()
+        choices = {
+            item["id"]: f"{mask_token(item['token'])} ({item['cp_id']})"
+            for item in pending
+        }
+        return self.async_show_form(
+            step_id="auth_select_pending",
+            data_schema=vol.Schema({vol.Required(AUTH_PENDING_ID): vol.In(choices)}),
+        )
+
+    def _selected_pending(self) -> dict[str, Any] | None:
+        """Return the selected pending scan from a fresh snapshot."""
+        if self._auth_manager is None:
+            return None
+        return next(
+            (
+                item
+                for item in self._auth_manager.pending_credentials
+                if item["id"] == self._auth_pending_id
+            ),
+            None,
+        )
+
+    async def async_step_auth_pending(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show actions for an unassigned RFID scan."""
+        manager = await self._get_auth_manager()
+        pending = self._selected_pending()
+        if pending is None:
+            return await self.async_step_authorization()
+        menu_options = ["auth_discard_pending", "auth_back"]
+        if manager.users:
+            menu_options.insert(0, "auth_assign_pending")
+        return self.async_show_menu(
+            step_id="auth_pending",
+            menu_options=menu_options,
+            description_placeholders={
+                "card": mask_token(pending["token"]),
+                "charger": pending["cp_id"],
+            },
+        )
+
+    async def async_step_auth_assign_pending(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Assign an unassigned scan to a user."""
+        manager = await self._get_auth_manager()
+        pending = self._selected_pending()
+        users = manager.users
+        if pending is None or not users:
+            return await self.async_step_authorization()
+        if user_input is not None:
+            await manager.async_assign_pending(
+                self._auth_pending_id,
+                user_input[AUTH_USER_ID],
+                label=user_input[AUTH_LABEL],
+            )
+            await self._async_clear_authorization_caches()
+            self._auth_pending_id = ""
+            return await self.async_step_authorization()
+        choices = {user_id: user["name"] for user_id, user in users.items()}
+        return self.async_show_form(
+            step_id="auth_assign_pending",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(AUTH_USER_ID): vol.In(choices),
+                    vol.Optional(AUTH_LABEL, default=""): cv.string,
+                }
+            ),
+            description_placeholders={"card": mask_token(pending["token"])},
+        )
+
+    async def async_step_auth_discard_pending(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Discard a pending scan after confirmation."""
+        manager = await self._get_auth_manager()
+        pending = self._selected_pending()
+        if pending is None:
+            return await self.async_step_authorization()
+        if user_input is not None:
+            if user_input[AUTH_CONFIRM]:
+                with contextlib.suppress(UnknownAuthorizationRecordError):
+                    await manager.async_discard_pending(self._auth_pending_id)
+                self._auth_pending_id = ""
+                return await self.async_step_authorization()
+            return await self.async_step_auth_pending()
+        return self.async_show_form(
+            step_id="auth_discard_pending",
+            data_schema=vol.Schema({vol.Required(AUTH_CONFIRM, default=False): bool}),
+            description_placeholders={"card": mask_token(pending["token"])},
         )
 
     async def async_step_cp_settings(

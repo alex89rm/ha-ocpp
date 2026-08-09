@@ -12,13 +12,24 @@ cpid stays read-only throughout: entity unique_ids derive from it, so
 changing it would orphan every existing entity.
 """
 
+import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from homeassistant import data_entry_flow
 
+from custom_components.ocpp.config_flow import (
+    AUTH_CHARGE_POINT,
+    AUTH_ENABLED,
+    AUTH_LABEL,
+    OPTIONS_TARGET,
+    OPTIONS_TARGET_AUTHORIZATION,
+)
 from custom_components.ocpp.const import (
+    CONF_AUTHORIZATION_REQUIRED,
+    CONF_AUTH_STATUS,
     CONF_CPID,
     CONF_CPIDS,
     CONF_FORCE_SMART_CHARGING,
@@ -81,14 +92,33 @@ def _form_fields(result):
     return {str(key) for key in result["data_schema"].schema}
 
 
-async def test_a_single_charger_skips_the_picker(hass):
-    """With one charge point there is nothing to choose; go straight to it."""
+async def _open_cp_settings(hass, entry, cp_id="CP_1"):
+    """Open settings for one charger through the central target picker."""
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    return await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={OPTIONS_TARGET: cp_id}
+    )
+
+
+async def _open_authorization(hass, entry):
+    """Open authorization management through the central target picker."""
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    return await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={OPTIONS_TARGET: OPTIONS_TARGET_AUTHORIZATION},
+    )
+
+
+async def test_a_single_charger_offers_settings_and_authorization(hass):
+    """Authorization remains reachable even when only one charger exists."""
     entry = _entry(hass, [{"CP_1": _cp_settings()}])
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
 
     assert result["type"] == data_entry_flow.FlowResultType.FORM
-    assert result["step_id"] == "cp_settings"
+    assert result["step_id"] == "init"
+    validator = next(iter(result["data_schema"].schema.values()))
+    assert set(validator.container) == {"CP_1", OPTIONS_TARGET_AUTHORIZATION}
 
 
 async def test_cpid_is_not_editable(hass):
@@ -99,7 +129,7 @@ async def test_cpid_is_not_editable(hass):
     """
     entry = _entry(hass, [{"CP_1": _cp_settings()}])
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_cp_settings(hass, entry)
 
     assert CONF_CPID not in _form_fields(result)
     assert result["description_placeholders"] == {
@@ -118,7 +148,7 @@ async def test_editing_settings_preserves_what_the_form_does_not_show(hass):
     """
     entry = _entry(hass, [{"CP_1": _cp_settings()}])
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_cp_settings(hass, entry)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
@@ -159,7 +189,7 @@ async def test_the_entry_is_updated_exactly_once(hass):
     listener = AsyncMock()
     entry.add_update_listener(listener)
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_cp_settings(hass, entry)
     await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
@@ -189,7 +219,7 @@ async def test_autoconfig_left_on_does_not_reseed_measurands(hass):
         [{"CP_1": _cp_settings(**{CONF_MONITORED_VARIABLES: "Power.Active.Import"})}],
     )
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_cp_settings(hass, entry)
     await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
@@ -213,7 +243,7 @@ async def test_autoconfig_off_offers_the_stored_measurands(hass):
     """
     entry = _entry(hass, [{"CP_1": _cp_settings()}])
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_cp_settings(hass, entry)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
@@ -257,7 +287,7 @@ async def test_selecting_no_measurands_is_rejected(hass):
     """
     entry = _entry(hass, [{"CP_1": _cp_settings()}])
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_cp_settings(hass, entry)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
@@ -297,7 +327,7 @@ async def test_multiple_chargers_get_a_picker_and_only_the_picked_one_changes(ha
     assert result["step_id"] == "init"
 
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={"cp_id": "CP_2"}
+        result["flow_id"], user_input={OPTIONS_TARGET: "CP_2"}
     )
     assert result["step_id"] == "cp_settings"
     assert result["description_placeholders"]["cpid"] == "second_cpid"
@@ -331,7 +361,7 @@ async def test_updates_landing_between_steps_are_not_clobbered(hass):
     """
     entry = _entry(hass, [{"CP_1": _cp_settings()}])
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_cp_settings(hass, entry)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
@@ -371,14 +401,16 @@ async def test_updates_landing_between_steps_are_not_clobbered(hass):
     assert stored[CONF_MONITORED_VARIABLES_AUTOCONFIG] is False
 
 
-async def test_no_chargers_means_nothing_to_configure(hass):
-    """A central system nothing has connected to yet aborts cleanly."""
+async def test_authorization_is_configurable_before_a_charger_connects(hass):
+    """Users can be prepared before the first charger connects."""
     entry = _entry(hass, [])
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
 
-    assert result["type"] == data_entry_flow.FlowResultType.ABORT
-    assert result["reason"] == "no_charge_points"
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "init"
+    validator = next(iter(result["data_schema"].schema.values()))
+    assert set(validator.container) == {OPTIONS_TARGET_AUTHORIZATION}
 
 
 async def test_the_form_defaults_are_the_stored_values(hass):
@@ -403,10 +435,108 @@ async def test_the_form_defaults_are_the_stored_values(hass):
         ],
     )
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_cp_settings(hass, entry)
 
     defaults = {str(key): key.default() for key in result["data_schema"].schema}
     assert defaults[CONF_MAX_CURRENT] == 63
     assert defaults[CONF_SKIP_SCHEMA_VALIDATION] is True
     assert defaults[CONF_FORCE_SMART_CHARGING] is False
     assert defaults[CONF_MONITORED_VARIABLES_AUTOCONFIG] is True
+
+
+async def test_authorization_policy_and_users_are_managed_without_entry_reload(hass):
+    """Registry edits persist outside config entry data and do not reload OCPP."""
+    entry = _entry(hass, [{"CP_1": _cp_settings()}])
+    listener = AsyncMock()
+    entry.add_update_listener(listener)
+
+    result = await _open_authorization(hass, entry)
+    assert result["type"] == data_entry_flow.FlowResultType.MENU
+    assert "auth_settings" in result["menu_options"]
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "auth_settings"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={CONF_AUTHORIZATION_REQUIRED: True},
+    )
+    assert result["type"] == data_entry_flow.FlowResultType.MENU
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "auth_add_user"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"name": "Alessio", AUTH_ENABLED: True}
+    )
+    assert result["type"] == data_entry_flow.FlowResultType.MENU
+    assert result["step_id"] == "auth_user"
+    await hass.async_block_till_done()
+    assert listener.await_count == 0
+
+
+async def test_authorization_policy_clears_every_connected_charger_cache(hass):
+    """A stricter central policy must not leave charger-side accept decisions."""
+    entry = _entry(hass, [{"CP_1": _cp_settings()}, {"CP_2": _cp_settings()}])
+    result = await _open_authorization(hass, entry)
+    flow = hass.config_entries.options._progress[result["flow_id"]]
+    clear_cache = AsyncMock(return_value=True)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = SimpleNamespace(
+        authorization=flow._auth_manager,
+        charge_points={"CP_1": object(), "CP_2": object()},
+        clear_authorization_cache=clear_cache,
+    )
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "auth_settings"}
+    )
+    await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={CONF_AUTHORIZATION_REQUIRED: True},
+    )
+
+    assert clear_cache.await_count == 2
+    clear_cache.assert_any_await("CP_1")
+    clear_cache.assert_any_await("CP_2")
+
+
+async def test_options_flow_learns_and_assigns_an_rfid_card(hass):
+    """The progress flow captures one card and requires explicit confirmation."""
+    entry = _entry(hass, [{"CP_1": _cp_settings()}])
+    result = await _open_authorization(hass, entry)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "auth_add_user"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"name": "Alessio", AUTH_ENABLED: True}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "auth_learn_card"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={AUTH_CHARGE_POINT: "CP_1", AUTH_LABEL: "Blue card"},
+    )
+    assert result["type"] == data_entry_flow.FlowResultType.SHOW_PROGRESS
+
+    flow = hass.config_entries.options._progress[result["flow_id"]]
+    manager = flow._auth_manager
+    assert manager.capture_for_enrollment("CP_1", "RFID-123") is True
+    await asyncio.sleep(0)
+
+    result = await hass.config_entries.options.async_configure(result["flow_id"])
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "auth_confirm_card"
+    assert result["description_placeholders"]["card"] == "****-123"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            AUTH_LABEL: "Blue card",
+            AUTH_ENABLED: True,
+            CONF_AUTH_STATUS: "Accepted",
+        },
+    )
+    assert result["type"] == data_entry_flow.FlowResultType.MENU
+    assert result["step_id"] == "auth_user"
+    assert manager.user_for_token("RFID-123")[1] == "Alessio"

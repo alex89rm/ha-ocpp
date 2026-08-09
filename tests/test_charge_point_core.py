@@ -240,6 +240,39 @@ def test_process_phases_voltage_and_current_branches(hass):
     assert cp._metrics[(2, "Power.Active.Import")].unit == HA_POWER_UNIT
 
 
+@pytest.mark.parametrize(
+    ("phase_values", "expected"),
+    [
+        (
+            [("L1-N", 239.73), ("L2-N", 0.05), ("L3-N", 0.05)],
+            239.73,
+        ),
+        (
+            [("L1-L2", 400.0), ("L2-L3", 0.05), ("L3-L1", 0.05)],
+            400.0 / math.sqrt(3),
+        ),
+        (
+            [("L1", 241.2), ("L2", 0.05), ("L3", 0.05)],
+            241.2,
+        ),
+        (
+            [("L1-N", 0.05), ("L2-N", -0.05), ("L3-N", 0.0)],
+            0.0,
+        ),
+    ],
+)
+def test_process_phases_ignores_subvolt_voltage_noise(hass, phase_values, expected):
+    """Unused phases with residual readings must not corrupt voltage."""
+    cp = _mk_cp(hass)
+    bucket = [
+        _mv("Voltage", value, phase=phase, unit="V") for phase, value in phase_values
+    ]
+
+    cp.process_phases(bucket, connector_id=1)
+
+    assert cp._metrics[(1, "Voltage")].value == pytest.approx(expected)
+
+
 def test_get_energy_kwh_and_session_derive(hass):
     """Test get_energy_kwh + process_measurands path (EAIR Wh → kWh, derive Energy.Session)."""
     cp = _mk_cp(hass, version=OcppVersion.V201)  # != 1.6 to enable session derive

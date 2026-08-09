@@ -1,5 +1,6 @@
 """Representation of a OCPP 1.6 charging station."""
 
+import asyncio
 from datetime import datetime, timedelta, UTC
 import logging
 
@@ -10,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.const import UnitOfTime
 import voluptuous as vol
 from websockets.asyncio.server import ServerConnection
+from websockets.protocol import State
 
 from ocpp.routing import on
 from ocpp.v16 import call, call_result
@@ -68,6 +70,9 @@ from .const import (
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
+MIN_IDLE_METER_VALUES_INTERVAL = 10
+POST_TRANSACTION_METER_VALUES_DELAY = 1
+
 
 def _to_message_trigger(name: str) -> MessageTrigger | None:
     if isinstance(name, MessageTrigger):
@@ -108,6 +113,57 @@ class ChargePoint(cp):
             charger,
         )
         self._active_tx: dict[int, int] = {}  # connector_id -> transaction_id
+        self._idle_meter_values_lock = asyncio.Lock()
+
+    def _has_active_transaction(self) -> bool:
+        """Return whether any connector has an active transaction."""
+        return any(self._active_tx.values()) or bool(self.active_transaction_id)
+
+    async def _request_idle_meter_values(self) -> bool:
+        """Request a fresh meter snapshot while the charger is idle."""
+        if (
+            self.settings.idle_interval <= 0
+            or not self.post_connect_success
+            or not self.supported_features & prof.REM
+            or self._has_active_transaction()
+            or self._connection.state is not State.OPEN
+        ):
+            return False
+
+        async with self._idle_meter_values_lock:
+            if self._has_active_transaction():
+                return False
+            try:
+                return await self.trigger_custom_message(MessageTrigger.meter_values)
+            except Exception as ex:
+                _LOGGER.debug(
+                    "Idle MeterValues request failed for '%s': %s", self.id, ex
+                )
+                return False
+
+    async def _request_idle_meter_values_after_stop(self):
+        """Refresh measurements shortly after the last transaction stops."""
+        await asyncio.sleep(POST_TRANSACTION_METER_VALUES_DELAY)
+        await self._request_idle_meter_values()
+
+    async def monitor_idle_meter_values(self):
+        """Periodically request measurements not sent while the charger is idle."""
+        if self.settings.idle_interval <= 0:
+            return
+
+        interval = max(MIN_IDLE_METER_VALUES_INTERVAL, self.settings.idle_interval)
+        connection = self._connection
+        while connection.state is State.OPEN:
+            try:
+                await asyncio.wait_for(connection.wait_closed(), timeout=interval)
+                return
+            except TimeoutError:
+                pass
+            if self._connection is not connection or connection.state is not State.OPEN:
+                return
+            if self.post_connect_success and not self.supported_features & prof.REM:
+                return
+            await self._request_idle_meter_values()
 
     async def get_number_of_connectors(self) -> int:
         """Return number of connectors on this charger."""
@@ -1316,6 +1372,7 @@ class ChargePoint(cp):
                 self._metrics[key].value = 0
 
         self.hass.async_create_task(self.update(self.settings.cpid))
+        self.hass.async_create_task(self._request_idle_meter_values_after_stop())
         return call_result.StopTransaction(
             id_tag_info={om.status.value: AuthorizationStatus.accepted.value}
         )

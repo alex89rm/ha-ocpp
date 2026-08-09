@@ -74,6 +74,7 @@ from .const import (
 )
 
 TIME_MINUTES = UnitOfTime.MINUTES
+VOLTAGE_NOISE_FLOOR = 1.0
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
 
@@ -561,6 +562,9 @@ class ChargePoint(cp):
                 _LOGGER.debug(f"monitor_connection stopping due to exception: {ex}")
                 break
 
+    async def monitor_idle_meter_values(self):
+        """Refresh idle meter values when supported by the OCPP version."""
+
     async def _handle_call(self, msg):
         try:
             await super()._handle_call(msg)
@@ -570,7 +574,13 @@ class ChargePoint(cp):
 
     async def start(self):
         """Start charge point."""
-        await self.run([super().start(), self.monitor_connection()])
+        await self.run(
+            [
+                super().start(),
+                self.monitor_connection(),
+                self.monitor_idle_meter_values(),
+            ]
+        )
 
     async def run(self, tasks):
         """Run a specified list of tasks."""
@@ -612,7 +622,13 @@ class ChargePoint(cp):
         self._connection = connection
         self._metrics[(0, cstat.reconnects.value)].value += 1
         # post connect now handled on receiving boot notification or with backstop in monitor connection
-        await self.run([super().start(), self.monitor_connection()])
+        await self.run(
+            [
+                super().start(),
+                self.monitor_connection(),
+                self.monitor_idle_meter_values(),
+            ]
+        )
 
     async def async_update_device_info(
         self, serial: str, vendor: str, model: str, firmware_version: str
@@ -730,6 +746,11 @@ class ChargePoint(cp):
             nonzero = [v for v in values if v != 0.0]
             return (sum(nonzero) / len(nonzero)) if nonzero else 0.0
 
+        def average_valid_voltages(values: list[float]) -> float:
+            """Average phase voltages above the measurement noise floor."""
+            valid = [v for v in values if abs(v) >= VOLTAGE_NOISE_FLOOR]
+            return (sum(valid) / len(valid)) if valid else 0.0
+
         measurand_data: dict[str, dict[str, float]] = {}
 
         for item in data:
@@ -790,18 +811,20 @@ class ChargePoint(cp):
             if metric in [Measurand.voltage.value]:
                 if not phase_info.keys().isdisjoint(line_to_neutral_phases):
                     # Line to neutral voltages are averaged
-                    metric_value = average_of_nonzero(
+                    metric_value = average_valid_voltages(
                         [phase_info.get(phase, 0.0) for phase in line_to_neutral_phases]
                     )
                 elif not phase_info.keys().isdisjoint(line_to_line_phases):
                     # Line to line voltages are averaged and converted to line to neutral
-                    metric_value = average_of_nonzero(
+                    metric_value = average_valid_voltages(
                         [phase_info.get(phase, 0.0) for phase in line_to_line_phases]
                     ) / sqrt(3)
                 elif not phase_info.keys().isdisjoint(line_phases_all):
                     # Workaround for chargers that don't follow engineering convention
                     # Assumes voltages are line to neutral
-                    metric_value = _avg_l123(phase_info)
+                    metric_value = average_valid_voltages(
+                        [phase_info.get(phase, 0.0) for phase in phases_l123]
+                    )
 
             else:
                 is_current = mname.lower().startswith("current")

@@ -25,7 +25,7 @@
                     "max_current": "Maximaler Ladestrom",
                     "max_power": "Maximale Ladeleistung",
                     "meter_interval": "Abtastintervall Laden (Sekunden)",
-                    "idle_interval": "Abtastintervall Leerlauf (Sekunden)",
+                    "idle_interval": "Messwert-Aktualisierung im Leerlauf (Sekunden, 0 deaktiviert)",
                     "skip_schema_validation": "Überspringe OCPP-Schemavalidierung",
                     "force_smart_charging": "Erzwinge Smart Charging Funktionsprofil",
                     "monitored_variables_autoconfig": "Automatische Erkennung der OCPP-Messwerte"

@@ -21,7 +21,7 @@
                     "cpid": "Nombre del punto de carga",
                     "max_power": "Potencia máxima de carga",
                     "meter_interval": "Intervalo de mediciones (segundos)",
-                    "idle_interval": "Intervalo de muestreo del cargador en reposo (segundos)",
+                    "idle_interval": "Intervalo de actualización de mediciones en reposo (segundos, 0 desactiva)",
                     "skip_schema_validation": "Omitir validación esquema OCPP",
                     "force_smart_charging": "Forzar perfil de función Smart Charging"
                 }

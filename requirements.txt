@@ -3,7 +3,7 @@ home-assistant-frontend==20260624.6
 jsonschema==4.26.0
 ocpp==2.1.0
 pre-commit==4.6.1
-pytest-homeassistant-custom-component==0.13.348
+pytest-homeassistant-custom-component==0.13.354
 ruff==0.16.1
 setuptools>=83.0.0 # not directly required, pinned by Snyk to avoid a vulnerability
 uv>=0.4

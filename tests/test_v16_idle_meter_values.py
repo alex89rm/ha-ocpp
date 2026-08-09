@@ -70,6 +70,20 @@ async def test_request_idle_meter_values_when_supported(hass):
     )
 
 
+async def test_post_connect_refreshes_restored_measurements(hass):
+    """A reconnect promptly replaces measurements restored by Home Assistant."""
+    charge_point = _make_charge_point(hass)
+    charge_point._request_idle_meter_values = AsyncMock(return_value=True)
+
+    with patch(
+        "custom_components.ocpp.ocppv16.cp.post_connect", new=AsyncMock()
+    ) as parent_post_connect:
+        await charge_point.post_connect()
+
+    parent_post_connect.assert_awaited_once_with()
+    charge_point._request_idle_meter_values.assert_awaited_once_with()
+
+
 async def test_request_idle_meter_values_skips_active_transaction(hass):
     """No idle refresh is sent while any connector is charging."""
     charge_point = _make_charge_point(hass)

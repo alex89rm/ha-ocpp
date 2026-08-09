@@ -16,12 +16,14 @@ from .const import (
     CONF_AUTH_LIST,
     CONF_AUTH_STATUS,
     CONF_CPIDS,
+    CONF_CHARGING_RATE_UNITS,
     CONF_DEFAULT_AUTH_STATUS,
     CONF_ID_TAG,
     CONF_NAME,
     CONF_CPID,
     CONF_IDLE_INTERVAL,
     CONF_MAX_CURRENT,
+    CONF_MAX_POWER,
     CONF_METER_INTERVAL,
     CONF_MONITORED_VARIABLES,
     CONF_MONITORED_VARIABLES_AUTOCONFIG,
@@ -42,6 +44,8 @@ from .const import (
     DEFAULT_CPID,
     DEFAULT_IDLE_INTERVAL,
     DEFAULT_MAX_CURRENT,
+    DEFAULT_MAX_POWER,
+    DEFAULT_CHARGING_RATE_UNITS,
     DEFAULT_METER_INTERVAL,
     DEFAULT_MONITORED_VARIABLES,
     DEFAULT_MONITORED_VARIABLES_AUTOCONFIG,
@@ -156,11 +160,13 @@ async def async_migrate_entry(hass, config_entry: ConfigEntry):
             CONF_CPID: DEFAULT_CPID,
             CONF_IDLE_INTERVAL: DEFAULT_IDLE_INTERVAL,
             CONF_MAX_CURRENT: DEFAULT_MAX_CURRENT,
+            CONF_MAX_POWER: DEFAULT_MAX_POWER,
             CONF_METER_INTERVAL: DEFAULT_METER_INTERVAL,
             CONF_MONITORED_VARIABLES: DEFAULT_MONITORED_VARIABLES,
             CONF_MONITORED_VARIABLES_AUTOCONFIG: DEFAULT_MONITORED_VARIABLES_AUTOCONFIG,
             CONF_SKIP_SCHEMA_VALIDATION: DEFAULT_SKIP_SCHEMA_VALIDATION,
             CONF_FORCE_SMART_CHARGING: DEFAULT_FORCE_SMART_CHARGING,
+            CONF_CHARGING_RATE_UNITS: DEFAULT_CHARGING_RATE_UNITS,
         }
         csid_keys = {
             CONF_HOST: DEFAULT_HOST,
@@ -193,7 +199,7 @@ async def async_migrate_entry(hass, config_entry: ConfigEntry):
             config_entry, data=new_data, minor_version=0, version=2
         )
 
-    if config_entry.version == 2 and config_entry.minor_version == 0:
+    if config_entry.version == 2 and config_entry.minor_version < 2:
         data = {**config_entry.data}
         cpids = data.get(CONF_CPIDS, [])
 
@@ -202,8 +208,16 @@ async def async_migrate_entry(hass, config_entry: ConfigEntry):
             if not isinstance(cp_map, dict) or not cp_map:
                 continue
             cp_id, cp_data = next(iter(cp_map.items()))
-            if CONF_NUM_CONNECTORS not in cp_data:
-                cp_data = {**cp_data, CONF_NUM_CONNECTORS: DEFAULT_NUM_CONNECTORS}
+            defaults = {
+                CONF_NUM_CONNECTORS: DEFAULT_NUM_CONNECTORS,
+                CONF_MAX_POWER: DEFAULT_MAX_POWER,
+                CONF_CHARGING_RATE_UNITS: DEFAULT_CHARGING_RATE_UNITS,
+            }
+            missing = {
+                key: value for key, value in defaults.items() if key not in cp_data
+            }
+            if missing:
+                cp_data = {**cp_data, **missing}
                 cpids[idx] = {cp_id: cp_data}
                 changed = True
 
@@ -213,14 +227,14 @@ async def async_migrate_entry(hass, config_entry: ConfigEntry):
                 config_entry,
                 data=data,
                 version=2,
-                minor_version=1,
+                minor_version=2,
             )
         else:
             hass.config_entries.async_update_entry(
                 config_entry,
                 data=data,
                 version=2,
-                minor_version=1,
+                minor_version=2,
             )
 
     _LOGGER.info(

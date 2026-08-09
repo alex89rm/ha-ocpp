@@ -11,7 +11,7 @@ from homeassistant.exceptions import HomeAssistantError
 from websockets import NegotiationError
 
 from custom_components.ocpp.api import CentralSystem
-from custom_components.ocpp.const import DOMAIN
+from custom_components.ocpp.const import CHARGING_RATE_UNIT_POWER, DOMAIN
 from custom_components.ocpp.enums import (
     HAChargerServices as csvcs,
     HAChargerStatuses as cstat,
@@ -276,6 +276,11 @@ async def test_setters_when_missing_and_present(hass):
     cp = _install_dummy_cp(cs)
     assert await cs.set_max_charge_rate_amps("test_cpid", 16.0, connector_id=2) is True
     assert ("set_charge_rate", {"limit_amps": 16.0, "conn_id": 2}) in cp.calls
+    assert (
+        await cs.set_max_charge_rate("test_cpid", 2300.0, CHARGING_RATE_UNIT_POWER)
+        is True
+    )
+    assert ("set_charge_rate", {"limit_watts": 2300.0, "conn_id": 0}) in cp.calls
 
     # set_charger_state branches
     await cs.set_charger_state(
@@ -623,9 +628,9 @@ async def test_on_connect_cancels_tasks_when_stop_fails(hass, monkeypatch):
     # must not raise, and must still replace the charge point
     await cs.on_connect(_make_ws("ocpp2.0.1"))
 
-    assert all(
-        task.cancelled for task in old_cp.tasks
-    ), "stale charge point's tasks must be cancelled when stop() fails"
+    assert all(task.cancelled for task in old_cp.tasks), (
+        "stale charge point's tasks must be cancelled when stop() fails"
+    )
     assert cs.charge_points["CP_1"] is new_cp
     assert new_cp.started is True
 

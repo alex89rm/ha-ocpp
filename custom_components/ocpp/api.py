@@ -23,12 +23,15 @@ from .ocppv16 import ChargePoint as ChargePointv16
 from .ocppv201 import ChargePoint as ChargePointv201
 
 from .const import (
+    CHARGING_RATE_UNIT_CURRENT,
+    CHARGING_RATE_UNIT_POWER,
     CentralSystemSettings,
     DOMAIN,
     OCPP_1_6,
     OCPP_2_0,
     OCPP_VERSION_AUTO,
     ChargerSystemSettings,
+    charging_rate_unit_from_token,
 )
 from .enums import (
     HAChargerServices as csvcs,
@@ -645,13 +648,30 @@ class CentralSystem:
         self, id: str, value: float, connector_id: int = 0
     ):
         """Set the maximum charge rate in amps."""
-        # allow id to be either cpid or cp_id
+        # Preserve the existing connector-aware control path. The generic
+        # maximum-rate API below is deliberately station-wide.
         cp_id = self.cpids.get(id, id)
-
         if cp_id in self.charge_points:
             return await self.charge_points[cp_id].set_charge_rate(
                 limit_amps=value, conn_id=connector_id
             )
+        return False
+
+    async def set_max_charge_rate(self, id: str, value: float, unit: str) -> bool:
+        """Set the station-wide maximum charging rate."""
+        # allow id to be either cpid or cp_id
+        cp_id = self.cpids.get(id, id)
+
+        if cp_id in self.charge_points:
+            cp = self.charge_points[cp_id]
+            if hasattr(cp, "set_max_charge_rate"):
+                return await cp.set_max_charge_rate(value, unit)
+            normalized_unit = charging_rate_unit_from_token(unit)
+            if normalized_unit == CHARGING_RATE_UNIT_POWER:
+                return await cp.set_charge_rate(limit_watts=value, conn_id=0)
+            if normalized_unit == CHARGING_RATE_UNIT_CURRENT:
+                return await cp.set_charge_rate(limit_amps=value, conn_id=0)
+            return False
         return False
 
     async def set_charger_state(

@@ -53,11 +53,17 @@ from .enums import (
 )
 
 from .const import (
+    CHARGING_RATE_UNIT_CURRENT,
+    CHARGING_RATE_UNIT_POWER,
     CentralSystemSettings,
     ChargerSystemSettings,
+    DEFAULT_CHARGING_RATE_UNITS,
     DEFAULT_MEASURAND,
     HA_ENERGY_UNIT,
     MEASURANDS,
+    charging_rate_unit_from_token,
+    normalize_charging_rate_units,
+    split_charging_rate_units,
 )
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
@@ -274,6 +280,24 @@ class ChargePoint(cp):
 
         return effective_csv
 
+    async def get_supported_charging_rate_units(self) -> str:
+        """Return charging-rate units advertised by an OCPP 1.6 charger."""
+        fallback = normalize_charging_rate_units(
+            self.settings.charging_rate_units, DEFAULT_CHARGING_RATE_UNITS
+        )
+        if not (int(self.supported_features or 0) & prof.SMART):
+            return fallback
+
+        try:
+            units = await self.get_configuration(
+                ckey.charging_schedule_allowed_charging_rate_unit.value
+            )
+        except Exception as ex:
+            _LOGGER.debug("Charging rate unit detection failed: %s", ex)
+            return fallback
+
+        return normalize_charging_rate_units(units, fallback)
+
     async def set_standard_configuration(self):
         """Send configuration values to the charger."""
         await self.configure(
@@ -480,29 +504,34 @@ class ChargePoint(cp):
                 n = 0
             return base + max(0, n)
 
-        # Try ChargePointMaxProfile (connectorId = 0)
-        try:
-            req = call.SetChargingProfile(
-                connector_id=0,
-                cs_charging_profiles={
-                    om.charging_profile_id.value: _profile_id(
-                        ChargingProfilePurposeType.charge_point_max_profile.value, 0
-                    ),
-                    om.stack_level.value: stack_level,
-                    om.charging_profile_kind.value: ChargingProfileKindType.relative.value,
-                    om.charging_profile_purpose.value: ChargingProfilePurposeType.charge_point_max_profile.value,
-                    om.charging_schedule.value: _mk_schedule(units_value, limit_value),
-                },
-            )
-            resp = await self.call(req)
-            if resp.status == ChargingProfileStatus.accepted:
-                return True
-            _LOGGER.debug(
-                "ChargePointMaxProfile not accepted (%s); will continue.",
-                resp.status,
-            )
-        except Exception as ex:
-            _LOGGER.debug("ChargePointMaxProfile call raised: %s", ex)
+        # A connector-scoped request must never be widened to the whole station.
+        # Keep the historical station fallback only for callers targeting id 0.
+        if not conn_id or int(conn_id) <= 0:
+            try:
+                req = call.SetChargingProfile(
+                    connector_id=0,
+                    cs_charging_profiles={
+                        om.charging_profile_id.value: _profile_id(
+                            ChargingProfilePurposeType.charge_point_max_profile.value,
+                            0,
+                        ),
+                        om.stack_level.value: stack_level,
+                        om.charging_profile_kind.value: ChargingProfileKindType.relative.value,
+                        om.charging_profile_purpose.value: ChargingProfilePurposeType.charge_point_max_profile.value,
+                        om.charging_schedule.value: _mk_schedule(
+                            units_value, limit_value
+                        ),
+                    },
+                )
+                resp = await self.call(req)
+                if resp.status == ChargingProfileStatus.accepted:
+                    return True
+                _LOGGER.debug(
+                    "ChargePointMaxProfile not accepted (%s); will continue.",
+                    resp.status,
+                )
+            except Exception as ex:
+                _LOGGER.debug("ChargePointMaxProfile call raised: %s", ex)
 
         # Target connector (default 1 if unspecified/0)
         target_cid = int(conn_id) if conn_id and int(conn_id) > 0 else 1
@@ -578,6 +607,80 @@ class ChargePoint(cp):
                 )
 
         return bool(txp_ok or txd_ok)
+
+    async def set_max_charge_rate(self, value: float, unit: str) -> bool:
+        """Set a persistent station-wide maximum charge rate."""
+        if not (int(self.supported_features or 0) & prof.SMART):
+            _LOGGER.info("Smart charging is not supported by this charger")
+            return False
+
+        normalized_unit = charging_rate_unit_from_token(unit)
+        if normalized_unit not in (
+            CHARGING_RATE_UNIT_CURRENT,
+            CHARGING_RATE_UNIT_POWER,
+        ):
+            _LOGGER.warning("Unsupported charging rate unit: %s", unit)
+            return False
+
+        supported_units = split_charging_rate_units(
+            await self.get_supported_charging_rate_units()
+        )
+        if normalized_unit not in supported_units:
+            _LOGGER.warning(
+                "Charging rate unit %s is not supported by charger %s",
+                normalized_unit,
+                self.id,
+            )
+            return False
+
+        try:
+            stack_level = int(
+                await self.get_configuration(ckey.charge_profile_max_stack_level.value)
+            )
+        except Exception:
+            stack_level = 1
+        stack_level = max(1, stack_level)
+
+        charging_rate_unit = (
+            ChargingRateUnitType.amps.value
+            if normalized_unit == CHARGING_RATE_UNIT_CURRENT
+            else ChargingRateUnitType.watts.value
+        )
+        limit = int(value) if float(value).is_integer() else float(value)
+
+        profile = {
+            om.charging_profile_id.value: 1000,
+            om.stack_level.value: stack_level,
+            om.charging_profile_purpose.value: ChargingProfilePurposeType.charge_point_max_profile.value,
+            om.charging_profile_kind.value: ChargingProfileKindType.absolute.value,
+            om.charging_schedule.value: {
+                "startSchedule": datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                om.charging_rate_unit.value: charging_rate_unit,
+                om.charging_schedule_period.value: [
+                    {
+                        om.start_period.value: 0,
+                        om.limit.value: limit,
+                    }
+                ],
+            },
+        }
+
+        try:
+            resp = await self.call(
+                call.SetChargingProfile(
+                    connector_id=0,
+                    cs_charging_profiles=profile,
+                )
+            )
+        except Exception as ex:
+            _LOGGER.warning("Set maximum charge rate failed: %s", ex)
+            return False
+
+        if resp.status == ChargingProfileStatus.accepted:
+            return True
+
+        _LOGGER.warning("Set maximum charge rate rejected: %s", resp.status)
+        return False
 
     async def set_availability(self, state: bool = True, connector_id: int | None = 0):
         """Change availability."""

@@ -47,6 +47,7 @@
                 "data": {
                     "cpid": "Charge point identity",
                     "max_current": "Maximum charging current",
+                    "max_power": "Maximum charging power",
                     "meter_interval": "Charging sample interval (seconds)",
                     "monitored_variables_autoconfig": "Automatic detection of OCPP Measurands",
                     "idle_interval": "Charger idle sampling interval (seconds)",
@@ -123,6 +124,7 @@
                 "description": "Editing charge point {cp_id}. Its charge point identity (cpid: {cpid}) is fixed, because entity IDs derive from it.",
                 "data": {
                     "max_current": "Maximum charging current",
+                    "max_power": "Maximum charging power",
                     "meter_interval": "Charging sample interval (seconds)",
                     "monitored_variables_autoconfig": "Automatic detection of OCPP Measurands",
                     "idle_interval": "Charger idle sampling interval (seconds)",

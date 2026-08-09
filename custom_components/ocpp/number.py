@@ -12,7 +12,7 @@ from homeassistant.components.number import (
     NumberEntityDescription,
     RestoreNumber,
 )
-from homeassistant.const import UnitOfElectricCurrent
+from homeassistant.const import UnitOfElectricCurrent, UnitOfPower
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -21,15 +21,21 @@ from homeassistant.util import slugify
 
 from .api import CentralSystem
 from .const import (
+    CHARGING_RATE_UNIT_CURRENT,
+    CHARGING_RATE_UNIT_POWER,
+    CONF_CHARGING_RATE_UNITS,
     CONF_CPID,
     CONF_CPIDS,
     CONF_MAX_CURRENT,
+    CONF_MAX_POWER,
     CONF_NUM_CONNECTORS,
     DATA_UPDATED,
     DEFAULT_MAX_CURRENT,
+    DEFAULT_MAX_POWER,
     DEFAULT_NUM_CONNECTORS,
     DOMAIN,
     ICON,
+    split_charging_rate_units,
 )
 from .enums import Profiles
 
@@ -44,19 +50,37 @@ class OcppNumberDescription(NumberEntityDescription):
 
 
 ELECTRIC_CURRENT_AMPERE = UnitOfElectricCurrent.AMPERE
+ELECTRIC_POWER_WATT = UnitOfPower.WATT
 
-NUMBERS: Final = [
-    OcppNumberDescription(
-        key="maximum_current",
-        name="Maximum Current",
-        icon=ICON,
-        initial_value=DEFAULT_MAX_CURRENT,
-        native_min_value=0,
-        native_max_value=DEFAULT_MAX_CURRENT,
-        native_step=1,
-        native_unit_of_measurement=ELECTRIC_CURRENT_AMPERE,
-    ),
-]
+MAXIMUM_CURRENT: Final = OcppNumberDescription(
+    key="maximum_current",
+    name="Maximum Current",
+    icon=ICON,
+    initial_value=DEFAULT_MAX_CURRENT,
+    native_min_value=0,
+    native_max_value=DEFAULT_MAX_CURRENT,
+    native_step=1,
+    native_unit_of_measurement=ELECTRIC_CURRENT_AMPERE,
+)
+MAXIMUM_POWER: Final = OcppNumberDescription(
+    key="maximum_power",
+    name="Maximum Power",
+    icon=ICON,
+    initial_value=DEFAULT_MAX_POWER,
+    native_min_value=0,
+    native_max_value=DEFAULT_MAX_POWER,
+    native_step=10,
+    native_unit_of_measurement=ELECTRIC_POWER_WATT,
+)
+
+# Existing connector controls remain current-based and connector-scoped.
+NUMBERS: Final = [MAXIMUM_CURRENT]
+STATION_NUMBERS: Final = [MAXIMUM_CURRENT, MAXIMUM_POWER]
+
+NUMBER_CHARGING_RATE_UNITS: Final = {
+    "maximum_current": CHARGING_RATE_UNIT_CURRENT,
+    "maximum_power": CHARGING_RATE_UNIT_POWER,
+}
 
 
 async def async_setup_entry(hass, entry, async_add_devices):
@@ -68,6 +92,9 @@ async def async_setup_entry(hass, entry, async_add_devices):
     for charger in entry.data[CONF_CPIDS]:
         cp_id_settings = list(charger.values())[0]
         cpid = cp_id_settings[CONF_CPID]
+        supported_units = set(
+            split_charging_rate_units(cp_id_settings.get(CONF_CHARGING_RATE_UNITS))
+        )
 
         num_connectors = 1
         for item in entry.data.get(CONF_CPIDS, []):
@@ -81,65 +108,69 @@ async def async_setup_entry(hass, entry, async_add_devices):
                 continue
             break
 
-        if num_connectors > 1:
-            for desc in NUMBERS:
-                uid_flat = ".".join([NUMBER_DOMAIN, DOMAIN, cpid, desc.key])
-                stale_eid = ent_reg.async_get_entity_id(NUMBER_DOMAIN, DOMAIN, uid_flat)
+        selected_station_numbers = [
+            desc
+            for desc in STATION_NUMBERS
+            if NUMBER_CHARGING_RATE_UNITS[desc.key] in supported_units
+        ]
+
+        # Capability detection controls only the new station-wide entities.
+        # Connector-scoped controls are an existing feature and must survive.
+        for desc in STATION_NUMBERS:
+            if desc not in selected_station_numbers:
+                uid = ".".join([NUMBER_DOMAIN, DOMAIN, cpid, desc.key])
+                stale_eid = ent_reg.async_get_entity_id(NUMBER_DOMAIN, DOMAIN, uid)
                 if stale_eid:
                     ent_reg.async_remove(stale_eid)
 
-        for desc in NUMBERS:
+        def configured_description(desc: OcppNumberDescription):
             if desc.key == "maximum_current":
-                max_cur = float(
+                maximum = float(
                     cp_id_settings.get(CONF_MAX_CURRENT, DEFAULT_MAX_CURRENT)
                 )
-                ent_initial = max_cur
-                ent_max = max_cur
+            elif desc.key == "maximum_power":
+                maximum = float(cp_id_settings.get(CONF_MAX_POWER, DEFAULT_MAX_POWER))
             else:
-                ent_initial = desc.initial_value
-                ent_max = desc.native_max_value
+                maximum = desc.native_max_value
 
-            if num_connectors > 1:
+            return OcppNumberDescription(
+                key=desc.key,
+                name=desc.name,
+                icon=desc.icon,
+                initial_value=maximum,
+                native_min_value=desc.native_min_value,
+                native_max_value=maximum,
+                native_step=desc.native_step,
+                native_unit_of_measurement=desc.native_unit_of_measurement,
+            )
+
+        if num_connectors > 1:
+            for desc in NUMBERS:
                 for conn_id in range(1, num_connectors + 1):
                     entities.append(
                         ChargePointNumber(
                             hass=hass,
                             central_system=central_system,
                             cpid=cpid,
-                            description=OcppNumberDescription(
-                                key=desc.key,
-                                name=desc.name,
-                                icon=desc.icon,
-                                initial_value=ent_initial,
-                                native_min_value=desc.native_min_value,
-                                native_max_value=ent_max,
-                                native_step=desc.native_step,
-                                native_unit_of_measurement=desc.native_unit_of_measurement,
-                            ),
+                            description=configured_description(desc),
                             connector_id=conn_id,
                             op_connector_id=conn_id,
+                            station_wide=False,
                         )
                     )
-            else:
-                entities.append(
-                    ChargePointNumber(
-                        hass=hass,
-                        central_system=central_system,
-                        cpid=cpid,
-                        description=OcppNumberDescription(
-                            key=desc.key,
-                            name=desc.name,
-                            icon=desc.icon,
-                            initial_value=ent_initial,
-                            native_min_value=desc.native_min_value,
-                            native_max_value=ent_max,
-                            native_step=desc.native_step,
-                            native_unit_of_measurement=desc.native_unit_of_measurement,
-                        ),
-                        connector_id=None,
-                        op_connector_id=0,
-                    )
+
+        for desc in selected_station_numbers:
+            entities.append(
+                ChargePointNumber(
+                    hass=hass,
+                    central_system=central_system,
+                    cpid=cpid,
+                    description=configured_description(desc),
+                    connector_id=None,
+                    op_connector_id=0,
+                    station_wide=True,
                 )
+            )
 
     async_add_devices(entities, False)
 
@@ -158,6 +189,7 @@ class ChargePointNumber(RestoreNumber, NumberEntity):
         description: OcppNumberDescription,
         connector_id: int | None = None,
         op_connector_id: int | None = None,
+        station_wide: bool = False,
     ):
         """Initialize a Number instance."""
         self.cpid = cpid
@@ -165,6 +197,7 @@ class ChargePointNumber(RestoreNumber, NumberEntity):
         self.central_system = central_system
         self.entity_description = description
         self.connector_id = connector_id
+        self._station_wide = station_wide
         self._op_connector_id = (
             op_connector_id if op_connector_id is not None else (connector_id or 1)
         )
@@ -226,25 +259,34 @@ class ChargePointNumber(RestoreNumber, NumberEntity):
         )
 
     async def async_set_native_value(self, value):
-        """Set new value for max current (station-wide when _op_connector_id==0, otherwise per-connector).
-
-        - Optimistic UI: move the slider immediately; attempt backend; never raise.
-        """
+        """Set a connector or station-wide maximum charge rate."""
         self._attr_native_value = float(value)
         self.async_write_ha_state()
+        unit = NUMBER_CHARGING_RATE_UNITS[self.entity_description.key]
 
         try:
-            ok = await self.central_system.set_max_charge_rate_amps(
-                self.cpid, self._attr_native_value, connector_id=self._op_connector_id
-            )
+            if self._station_wide:
+                ok = await self.central_system.set_max_charge_rate(
+                    self.cpid,
+                    self._attr_native_value,
+                    unit,
+                )
+            else:
+                ok = await self.central_system.set_max_charge_rate_amps(
+                    self.cpid,
+                    self._attr_native_value,
+                    connector_id=self._op_connector_id,
+                )
             if not ok:
                 _LOGGER.warning(
-                    "Set current limit rejected by CP (kept optimistic UI at %.1f A).",
+                    "Set %s limit rejected by CP (kept optimistic UI at %s).",
+                    unit.lower(),
                     value,
                 )
         except Exception as ex:
             _LOGGER.warning(
-                "Set current limit failed: %s (kept optimistic UI at %.1f A).",
+                "Set %s limit failed: %s (kept optimistic UI at %s).",
+                unit.lower(),
                 ex,
                 value,
             )

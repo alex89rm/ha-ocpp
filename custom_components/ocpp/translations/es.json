@@ -19,6 +19,7 @@
                 "description": "Si necesitas ayuda con la configuración puedes hechar un [vistazo en]({docs_url}",
                 "data": {
                     "cpid": "Nombre del punto de carga",
+                    "max_power": "Potencia máxima de carga",
                     "meter_interval": "Intervalo de mediciones (segundos)",
                     "idle_interval": "Intervalo de muestreo del cargador en reposo (segundos)",
                     "skip_schema_validation": "Omitir validación esquema OCPP",

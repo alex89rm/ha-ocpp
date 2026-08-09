@@ -21,14 +21,18 @@ from homeassistant import data_entry_flow
 from custom_components.ocpp.const import (
     CONF_CPID,
     CONF_CPIDS,
+    CONF_CHARGING_RATE_UNITS,
     CONF_FORCE_SMART_CHARGING,
     CONF_IDLE_INTERVAL,
     CONF_MAX_CURRENT,
+    CONF_MAX_POWER,
     CONF_METER_INTERVAL,
     CONF_MONITORED_VARIABLES,
     CONF_MONITORED_VARIABLES_AUTOCONFIG,
     CONF_NUM_CONNECTORS,
     CONF_SKIP_SCHEMA_VALIDATION,
+    DEFAULT_CHARGING_RATE_UNITS,
+    DEFAULT_MAX_POWER,
     DOMAIN,
 )
 
@@ -49,6 +53,7 @@ def _cp_settings(**overrides):
     """Build a stored charge point settings dict, as discovery writes it."""
     settings = {
         **MOCK_CONFIG_CP,
+        CONF_CHARGING_RATE_UNITS: DEFAULT_CHARGING_RATE_UNITS,
         CONF_NUM_CONNECTORS: 2,
         CONF_MONITORED_VARIABLES: "Power.Active.Import,Voltage",
     }
@@ -123,6 +128,7 @@ async def test_editing_settings_preserves_what_the_form_does_not_show(hass):
         result["flow_id"],
         user_input={
             CONF_MAX_CURRENT: 63,
+            CONF_MAX_POWER: 7400,
             CONF_MONITORED_VARIABLES_AUTOCONFIG: True,
             CONF_METER_INTERVAL: 30,
             CONF_IDLE_INTERVAL: 600,
@@ -134,6 +140,7 @@ async def test_editing_settings_preserves_what_the_form_does_not_show(hass):
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     stored = _stored(entry, "CP_1")
     assert stored[CONF_MAX_CURRENT] == 63
+    assert stored[CONF_MAX_POWER] == 7400
     assert stored[CONF_SKIP_SCHEMA_VALIDATION] is True
     assert stored[CONF_FORCE_SMART_CHARGING] is False
     assert stored[CONF_METER_INTERVAL] == 30
@@ -141,6 +148,7 @@ async def test_editing_settings_preserves_what_the_form_does_not_show(hass):
     # Not shown by the form, must survive:
     assert stored[CONF_CPID] == "test_cpid"
     assert stored[CONF_NUM_CONNECTORS] == 2
+    assert stored[CONF_CHARGING_RATE_UNITS] == DEFAULT_CHARGING_RATE_UNITS
     assert stored[CONF_MONITORED_VARIABLES] == "Power.Active.Import,Voltage"
     # Settings stay in entry.data; nothing moves into entry.options.
     assert entry.options == {}
@@ -164,6 +172,7 @@ async def test_the_entry_is_updated_exactly_once(hass):
         result["flow_id"],
         user_input={
             CONF_MAX_CURRENT: 40,
+            CONF_MAX_POWER: DEFAULT_MAX_POWER,
             CONF_MONITORED_VARIABLES_AUTOCONFIG: True,
             CONF_METER_INTERVAL: 60,
             CONF_IDLE_INTERVAL: 900,
@@ -194,6 +203,7 @@ async def test_autoconfig_left_on_does_not_reseed_measurands(hass):
         result["flow_id"],
         user_input={
             CONF_MAX_CURRENT: 63,
+            CONF_MAX_POWER: DEFAULT_MAX_POWER,
             CONF_MONITORED_VARIABLES_AUTOCONFIG: True,
             CONF_METER_INTERVAL: 60,
             CONF_IDLE_INTERVAL: 900,
@@ -218,6 +228,7 @@ async def test_autoconfig_off_offers_the_stored_measurands(hass):
         result["flow_id"],
         user_input={
             CONF_MAX_CURRENT: 32,
+            CONF_MAX_POWER: DEFAULT_MAX_POWER,
             CONF_MONITORED_VARIABLES_AUTOCONFIG: False,
             CONF_METER_INTERVAL: 60,
             CONF_IDLE_INTERVAL: 900,
@@ -262,6 +273,7 @@ async def test_selecting_no_measurands_is_rejected(hass):
         result["flow_id"],
         user_input={
             CONF_MAX_CURRENT: 32,
+            CONF_MAX_POWER: DEFAULT_MAX_POWER,
             CONF_MONITORED_VARIABLES_AUTOCONFIG: False,
             CONF_METER_INTERVAL: 60,
             CONF_IDLE_INTERVAL: 900,
@@ -306,6 +318,7 @@ async def test_multiple_chargers_get_a_picker_and_only_the_picked_one_changes(ha
         result["flow_id"],
         user_input={
             CONF_MAX_CURRENT: 25,
+            CONF_MAX_POWER: 11000,
             CONF_MONITORED_VARIABLES_AUTOCONFIG: True,
             CONF_METER_INTERVAL: 60,
             CONF_IDLE_INTERVAL: 900,
@@ -316,6 +329,7 @@ async def test_multiple_chargers_get_a_picker_and_only_the_picked_one_changes(ha
 
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     assert _stored(entry, "CP_2")[CONF_MAX_CURRENT] == 25
+    assert _stored(entry, "CP_2")[CONF_MAX_POWER] == 11000
     assert _stored(entry, "CP_2")[CONF_CPID] == "second_cpid"
     assert _stored(entry, "CP_1") == _cp_settings()
 
@@ -336,6 +350,7 @@ async def test_updates_landing_between_steps_are_not_clobbered(hass):
         result["flow_id"],
         user_input={
             CONF_MAX_CURRENT: 63,
+            CONF_MAX_POWER: DEFAULT_MAX_POWER,
             CONF_MONITORED_VARIABLES_AUTOCONFIG: False,
             CONF_METER_INTERVAL: 60,
             CONF_IDLE_INTERVAL: 900,
@@ -395,6 +410,7 @@ async def test_the_form_defaults_are_the_stored_values(hass):
                 "CP_1": _cp_settings(
                     **{
                         CONF_MAX_CURRENT: 63,
+                        CONF_MAX_POWER: 7400,
                         CONF_SKIP_SCHEMA_VALIDATION: True,
                         CONF_FORCE_SMART_CHARGING: False,
                     }
@@ -407,6 +423,7 @@ async def test_the_form_defaults_are_the_stored_values(hass):
 
     defaults = {str(key): key.default() for key in result["data_schema"].schema}
     assert defaults[CONF_MAX_CURRENT] == 63
+    assert defaults[CONF_MAX_POWER] == 7400
     assert defaults[CONF_SKIP_SCHEMA_VALIDATION] is True
     assert defaults[CONF_FORCE_SMART_CHARGING] is False
     assert defaults[CONF_MONITORED_VARIABLES_AUTOCONFIG] is True

@@ -15,11 +15,13 @@ import voluptuous as vol
 from .const import (
     CONF_CPID,
     CONF_CPIDS,
+    CONF_CHARGING_RATE_UNITS,
     CONF_CSID,
     CONF_FORCE_SMART_CHARGING,
     CONF_HOST,
     CONF_IDLE_INTERVAL,
     CONF_MAX_CURRENT,
+    CONF_MAX_POWER,
     CONF_METER_INTERVAL,
     CONF_MONITORED_VARIABLES,
     CONF_MONITORED_VARIABLES_AUTOCONFIG,
@@ -36,10 +38,12 @@ from .const import (
     CONF_WEBSOCKET_PING_TRIES,
     DEFAULT_CPID,
     DEFAULT_CSID,
+    DEFAULT_CHARGING_RATE_UNITS,
     DEFAULT_FORCE_SMART_CHARGING,
     DEFAULT_HOST,
     DEFAULT_IDLE_INTERVAL,
     DEFAULT_MAX_CURRENT,
+    DEFAULT_MAX_POWER,
     DEFAULT_MEASURAND,
     DEFAULT_METER_INTERVAL,
     DEFAULT_MONITORED_VARIABLES,
@@ -90,6 +94,7 @@ STEP_USER_CP_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_CPID, default=DEFAULT_CPID): str,
         vol.Required(CONF_MAX_CURRENT, default=DEFAULT_MAX_CURRENT): int,
+        vol.Required(CONF_MAX_POWER, default=DEFAULT_MAX_POWER): int,
         vol.Required(
             CONF_MONITORED_VARIABLES_AUTOCONFIG,
             default=DEFAULT_MONITORED_VARIABLES_AUTOCONFIG,
@@ -117,7 +122,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for OCPP."""
 
     VERSION = 2
-    MINOR_VERSION = 1
+    MINOR_VERSION = 2
     CONNECTION_CLASS = CONN_CLASS_LOCAL_PUSH
 
     def __init__(self):
@@ -255,6 +260,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
                 cp_data = {
                     **user_input,
                     CONF_NUM_CONNECTORS: self._detected_num_connectors,
+                    CONF_CHARGING_RATE_UNITS: DEFAULT_CHARGING_RATE_UNITS,
                 }
                 cpids_list = self._data.get(CONF_CPIDS, []).copy()
                 cpids_list.append({self._cp_id: cp_data})
@@ -422,6 +428,10 @@ class OCPPOptionsFlow(OptionsFlow):
                 vol.Required(
                     CONF_MAX_CURRENT,
                     default=current.get(CONF_MAX_CURRENT, DEFAULT_MAX_CURRENT),
+                ): int,
+                vol.Required(
+                    CONF_MAX_POWER,
+                    default=current.get(CONF_MAX_POWER, DEFAULT_MAX_POWER),
                 ): int,
                 vol.Required(
                     CONF_MONITORED_VARIABLES_AUTOCONFIG,

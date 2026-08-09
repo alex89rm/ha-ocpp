@@ -20,6 +20,7 @@
                 "data": {
                     "cpid": "Charge point identifier",
                     "max_current": "Maximale laadstroom",
+                    "max_power": "Maximaal laadvermogen",
                     "meter_interval": "Meetinterval (secondes)",
                     "skip_schema_validation": "Skip OCPP schema validation",
                     "force_smart_charging": "Functieprofiel Smart Charging forceren"

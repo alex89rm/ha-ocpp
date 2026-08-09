@@ -47,6 +47,9 @@ from .enums import (
 from .const import (
     CentralSystemSettings,
     ChargerSystemSettings,
+    CHARGING_RATE_UNIT_CURRENT,
+    CHARGING_RATE_UNIT_POWER,
+    CONF_CHARGING_RATE_UNITS,
     CONF_AUTH_LIST,
     CONF_AUTH_STATUS,
     CONF_DEFAULT_AUTH_STATUS,
@@ -58,12 +61,15 @@ from .const import (
     DATA_UPDATED,
     DEFAULT_ENERGY_UNIT,
     DEFAULT_NUM_CONNECTORS,
+    DEFAULT_CHARGING_RATE_UNITS,
     DEFAULT_POWER_UNIT,
     DEFAULT_MEASURAND,
     DOMAIN,
     HA_ENERGY_UNIT,
     HA_POWER_UNIT,
     UNITS_OCCP_TO_HA,
+    charging_rate_unit_from_token,
+    normalize_charging_rate_units,
 )
 
 TIME_MINUTES = UnitOfTime.MINUTES
@@ -305,6 +311,12 @@ class ChargePoint(cp):
         """Get comma-separated list of measurands supported by the charger."""
         return ""
 
+    async def get_supported_charging_rate_units(self) -> str:
+        """Return comma-separated charging rate units supported by the charger."""
+        return normalize_charging_rate_units(
+            self.settings.charging_rate_units, DEFAULT_CHARGING_RATE_UNITS
+        )
+
     async def set_standard_configuration(self):
         """Send configuration values to the charger."""
         pass
@@ -333,15 +345,19 @@ class ChargePoint(cp):
             await self.get_heartbeat_interval()
 
             accepted_measurands: str = await self.get_supported_measurands()
+            charging_rate_units: str = await self.get_supported_charging_rate_units()
             updated_entry = {**self.entry.data}
             for i in range(len(updated_entry[CONF_CPIDS])):
                 if self.id in updated_entry[CONF_CPIDS][i]:
                     s = updated_entry[CONF_CPIDS][i][self.id]
-                    if s.get(CONF_MONITORED_VARIABLES) != accepted_measurands or s.get(
-                        CONF_NUM_CONNECTORS
-                    ) != int(self.num_connectors):
+                    if (
+                        s.get(CONF_MONITORED_VARIABLES) != accepted_measurands
+                        or s.get(CONF_NUM_CONNECTORS) != int(self.num_connectors)
+                        or s.get(CONF_CHARGING_RATE_UNITS) != charging_rate_units
+                    ):
                         s[CONF_MONITORED_VARIABLES] = accepted_measurands
                         s[CONF_NUM_CONNECTORS] = int(self.num_connectors)
+                        s[CONF_CHARGING_RATE_UNITS] = charging_rate_units
                     break
             # if an entry differs this will unload/reload and stop/restart the central system/websocket
             self.hass.config_entries.async_update_entry(self.entry, data=updated_entry)
@@ -409,6 +425,15 @@ class ChargePoint(cp):
     ):
         """Set a charging profile with defined limit."""
         pass
+
+    async def set_max_charge_rate(self, value: float, unit: str) -> bool:
+        """Set a persistent station-wide maximum charging rate."""
+        normalized_unit = charging_rate_unit_from_token(unit)
+        if normalized_unit == CHARGING_RATE_UNIT_CURRENT:
+            return bool(await self.set_charge_rate(limit_amps=value, conn_id=0))
+        if normalized_unit == CHARGING_RATE_UNIT_POWER:
+            return bool(await self.set_charge_rate(limit_watts=value, conn_id=0))
+        return False
 
     async def set_availability(self, state: bool = True) -> bool:
         """Change availability."""

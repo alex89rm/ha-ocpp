@@ -14,12 +14,14 @@ CONF_CPI = "charge_point_identity"
 CONF_CPID = "cpid"
 CONF_CPIDS = "cpids"
 CONF_CSID = "csid"
+CONF_CHARGING_RATE_UNITS = "charging_rate_units"
 CONF_DEFAULT_AUTH_STATUS = "default_authorization_status"
 CONF_HOST = ha.CONF_HOST
 CONF_ID_TAG = "id_tag"
 CONF_ICON = ha.CONF_ICON
 CONF_IDLE_INTERVAL = "idle_interval"
 CONF_MAX_CURRENT = "max_current"
+CONF_MAX_POWER = "max_power"
 CONF_METER_INTERVAL = "meter_interval"
 CONF_MODE = ha.CONF_MODE
 CONF_MONITORED_VARIABLES = ha.CONF_MONITORED_VARIABLES
@@ -47,6 +49,10 @@ DEFAULT_CSID = "central"
 DEFAULT_CPID = "charger"
 DEFAULT_HOST = "0.0.0.0"
 DEFAULT_MAX_CURRENT = 32
+DEFAULT_MAX_POWER = 22000
+CHARGING_RATE_UNIT_CURRENT = "Current"
+CHARGING_RATE_UNIT_POWER = "Power"
+DEFAULT_CHARGING_RATE_UNITS = CHARGING_RATE_UNIT_CURRENT
 DEFAULT_NUM_CONNECTORS = 1
 DEFAULT_PORT = 9000
 DEFAULT_SKIP_SCHEMA_VALIDATION = False
@@ -149,6 +155,46 @@ DEFAULT_CLASS_UNITS_HA = {
     SensorDeviceClass.TEMPERATURE: ha.UnitOfTemperature.CELSIUS,
 }
 
+CHARGING_RATE_UNIT_ALIASES = {
+    CHARGING_RATE_UNIT_CURRENT.casefold(): CHARGING_RATE_UNIT_CURRENT,
+    "a": CHARGING_RATE_UNIT_CURRENT,
+    "amp": CHARGING_RATE_UNIT_CURRENT,
+    "amps": CHARGING_RATE_UNIT_CURRENT,
+    "ampere": CHARGING_RATE_UNIT_CURRENT,
+    "amperes": CHARGING_RATE_UNIT_CURRENT,
+    CHARGING_RATE_UNIT_POWER.casefold(): CHARGING_RATE_UNIT_POWER,
+    "w": CHARGING_RATE_UNIT_POWER,
+    "watt": CHARGING_RATE_UNIT_POWER,
+    "watts": CHARGING_RATE_UNIT_POWER,
+}
+
+
+def charging_rate_unit_from_token(value: str | None) -> str | None:
+    """Return a canonical charging-rate unit for one token."""
+    return CHARGING_RATE_UNIT_ALIASES.get(str(value or "").strip().casefold())
+
+
+def normalize_charging_rate_units(
+    value: str | None, default: str = DEFAULT_CHARGING_RATE_UNITS
+) -> str:
+    """Return a stable CSV of supported OCPP charging-rate units."""
+    units: list[str] = []
+    for token in str(value or "").split(","):
+        normalized = charging_rate_unit_from_token(token)
+        if normalized and normalized not in units:
+            units.append(normalized)
+
+    if units:
+        return ",".join(units)
+    if default != value:
+        return normalize_charging_rate_units(default, CHARGING_RATE_UNIT_CURRENT)
+    return CHARGING_RATE_UNIT_CURRENT
+
+
+def split_charging_rate_units(value: str | None) -> tuple[str, ...]:
+    """Return normalized charging-rate units as a tuple."""
+    return tuple(normalize_charging_rate_units(value).split(","))
+
 
 @dataclass
 class ChargerSystemSettings:
@@ -162,6 +208,8 @@ class ChargerSystemSettings:
     monitored_variables_autoconfig: bool
     skip_schema_validation: bool
     force_smart_charging: bool
+    max_power: int = DEFAULT_MAX_POWER
+    charging_rate_units: str = DEFAULT_CHARGING_RATE_UNITS
     connection: int | None = None  # number of this connection in central server
     num_connectors: int = DEFAULT_NUM_CONNECTORS
 

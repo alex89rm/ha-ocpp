@@ -23,6 +23,7 @@
                 "data": {
                     "cpid": "Identität der Ladestation",
                     "max_current": "Maximaler Ladestrom",
+                    "max_power": "Maximale Ladeleistung",
                     "meter_interval": "Abtastintervall Laden (Sekunden)",
                     "idle_interval": "Abtastintervall Leerlauf (Sekunden)",
                     "skip_schema_validation": "Überspringe OCPP-Schemavalidierung",

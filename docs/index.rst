@@ -6,7 +6,7 @@
 
 |
 
-This is a Home Assistant integration for Electric Vehicle chargers that support the Open Charge Point Protocol.
+HA OCPP is a Home Assistant-native OCPP server for wallboxes, users, RFID credentials, measurements, and charging controls.
 
 Table of Contents
 =================
@@ -15,6 +15,8 @@ Table of Contents
    :maxdepth: 16
 
    installation
+   architecture
+   wallbox-profiles
    supported-devices
    user-guide
    support

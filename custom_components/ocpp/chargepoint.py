@@ -73,12 +73,12 @@ from .const import (
     charging_rate_unit_from_token,
     normalize_charging_rate_units,
 )
+from .wallbox_profiles import WallboxIdentity, select_profile
 
 if TYPE_CHECKING:
     from .authorization import AuthorizationManager
 
 TIME_MINUTES = UnitOfTime.MINUTES
-VOLTAGE_NOISE_FLOOR = 1.0
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
 
@@ -284,6 +284,10 @@ class ChargePoint(cp):
         self.post_connect_success = False
         self.tasks = None
         self._charger_reports_session_energy = False
+        self.wallbox_identity = WallboxIdentity()
+        self.wallbox_profile = select_profile(
+            self.wallbox_identity, self.settings.wallbox_profile
+        )
 
         # Connector-aware, but backwards compatible:
         self._metrics: _ConnectorAwareMetrics = _ConnectorAwareMetrics()
@@ -645,6 +649,23 @@ class ChargePoint(cp):
     ):
         """Update device info asynchronously."""
 
+        self.wallbox_identity = WallboxIdentity(
+            vendor=str(vendor or ""),
+            model=str(model or ""),
+            serial=str(serial or ""),
+            firmware_version=str(firmware_version or ""),
+        )
+        self.wallbox_profile = select_profile(
+            self.wallbox_identity, self.settings.wallbox_profile
+        )
+        _LOGGER.info(
+            "Selected wallbox profile %s for %s (%s %s)",
+            self.wallbox_profile.profile_id,
+            self.id,
+            self.wallbox_identity.vendor,
+            self.wallbox_identity.model,
+        )
+
         self._metrics[(0, cdet.model.value)].value = model
         self._metrics[(0, cdet.vendor.value)].value = vendor
         self._metrics[(0, cdet.firmware_version.value)].value = firmware_version
@@ -763,8 +784,10 @@ class ChargePoint(cp):
             return (sum(nonzero) / len(nonzero)) if nonzero else 0.0
 
         def average_valid_voltages(values: list[float]) -> float:
-            """Average phase voltages above the measurement noise floor."""
-            valid = [v for v in values if abs(v) >= VOLTAGE_NOISE_FLOOR]
+            """Average phase voltages above the active profile's noise floor."""
+            valid = [
+                v for v in values if abs(v) >= self.wallbox_profile.voltage_noise_floor
+            ]
             return (sum(valid) / len(valid)) if valid else 0.0
 
         measurand_data: dict[str, dict[str, float]] = {}
@@ -773,7 +796,9 @@ class ChargePoint(cp):
             # create ordered Dict for each measurand, eg {"voltage":{"unit":"V","L1-N":"230"...}}
             measurand = item.measurand
             phase = item.phase
-            value = item.value
+            value = self.wallbox_profile.normalize_measurand_value(
+                measurand, item.value, phase
+            )
             unit = item.unit
             context = item.context
 

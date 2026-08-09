@@ -1,5 +1,4 @@
-This folder contains all the documentation. Changes are automatically updated to [readthedocs](https://home-assistant-ocpp.readthedocs.io) and the
-[wiki](https://github.com/lbbrhzn/ocpp/wiki).
+This folder contains the HA OCPP product and development documentation.
 
 The toplevel file for readthedocs is [index.rst](index.rst)
 

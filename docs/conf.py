@@ -2,7 +2,7 @@
 
 # -- Project information
 
-project = "home-assistant-ocpp"
+project = "HA OCPP"
 master_doc = "index"
 
 # -- General configuration

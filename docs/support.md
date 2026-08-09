@@ -7,7 +7,9 @@
 
 ## General
 
-If you need help, check out our [forum](https://github.com/lbbrhzn/ocpp/discussions) or submit an [issue](https://github.com/lbbrhzn/ocpp/issues).
+If you need help, start a
+[discussion](https://github.com/alex89rm/ha-ocpp/discussions) or submit an
+[issue](https://github.com/alex89rm/ha-ocpp/issues).
 
 ## FAQ
 

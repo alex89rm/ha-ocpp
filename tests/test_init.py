@@ -13,8 +13,10 @@ from custom_components.ocpp.const import (
     CONF_CPID,
     CONF_CPIDS,
     CONF_MAX_POWER,
+    CONF_WALLBOX_PROFILE,
     DEFAULT_CHARGING_RATE_UNITS,
     DEFAULT_MAX_POWER,
+    DEFAULT_WALLBOX_PROFILE,
     DOMAIN,
 )
 
@@ -138,9 +140,10 @@ async def test_migration_entry(
     cp_data = next(iter(config_entry.data[CONF_CPIDS][0].values()))
     assert cp_data[CONF_MAX_POWER] == DEFAULT_MAX_POWER
     assert cp_data[CONF_CHARGING_RATE_UNITS] == DEFAULT_CHARGING_RATE_UNITS
+    assert cp_data[CONF_WALLBOX_PROFILE] == DEFAULT_WALLBOX_PROFILE
     # check versions match
     assert config_entry.version == 2
-    assert config_entry.minor_version == 2
+    assert config_entry.minor_version == 3
 
     # Unload the entry and verify that the data has been removed
     assert await hass.config_entries.async_remove(config_entry.entry_id)

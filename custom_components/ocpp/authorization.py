@@ -16,6 +16,7 @@ from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from ocpp.v16.enums import AuthorizationStatus
 
 from .const import (
@@ -25,6 +26,7 @@ from .const import (
     CONF_ID_TAG,
     CONF_NAME,
     CONFIG,
+    DASHBOARD_UPDATED,
     DOMAIN,
 )
 
@@ -73,6 +75,7 @@ class _EnrollmentSession:
     future: asyncio.Future[EnrollmentResult]
     timeout_handle: asyncio.TimerHandle
     notify: bool
+    expires_at: float
 
 
 def mask_token(token: str) -> str:
@@ -254,10 +257,12 @@ class AuthorizationManager:
     async def _async_save(self) -> None:
         """Persist the current registry."""
         await self._store.async_save(copy.deepcopy(self._data))
+        async_dispatcher_send(self.hass, DASHBOARD_UPDATED)
 
     def _delay_save(self) -> None:
         """Schedule persistence from synchronous OCPP handlers."""
         self._store.async_delay_save(lambda: copy.deepcopy(self._data), delay=0)
+        async_dispatcher_send(self.hass, DASHBOARD_UPDATED)
 
     @property
     def registered_only(self) -> bool:
@@ -273,6 +278,18 @@ class AuthorizationManager:
     def pending_credentials(self) -> list[dict[str, Any]]:
         """Return a defensive copy of unassigned credential scans."""
         return copy.deepcopy(self._data["pending_credentials"])
+
+    @property
+    def active_enrollments(self) -> list[dict[str, Any]]:
+        """Return active enrollment windows without exposing card data."""
+        now = monotonic()
+        return [
+            {
+                "cp_id": cp_id,
+                "seconds_remaining": max(0, round(session.expires_at - now)),
+            }
+            for cp_id, session in self._enrollments.items()
+        ]
 
     async def async_set_registered_only(self, registered_only: bool) -> None:
         """Set the default policy for unknown credentials."""
@@ -516,7 +533,9 @@ class AuthorizationManager:
             future=future,
             timeout_handle=timeout_handle,
             notify=notify,
+            expires_at=monotonic() + timeout,
         )
+        async_dispatcher_send(self.hass, DASHBOARD_UPDATED)
 
         if notify:
             # A device button has no flow waiting on this future. Consume a
@@ -525,7 +544,7 @@ class AuthorizationManager:
             persistent_notification.async_create(
                 self.hass,
                 f"Present an RFID card to charger {cp_id} within {timeout} seconds.",
-                title="OCPP RFID enrollment",
+                title="HA OCPP RFID enrollment",
                 notification_id=self._notification_id(cp_id),
             )
         return future
@@ -549,9 +568,10 @@ class AuthorizationManager:
             persistent_notification.async_create(
                 self.hass,
                 f"No RFID card was read by charger {cp_id}.",
-                title="OCPP RFID enrollment timed out",
+                title="HA OCPP RFID enrollment timed out",
                 notification_id=self._notification_id(cp_id),
             )
+        async_dispatcher_send(self.hass, DASHBOARD_UPDATED)
 
     def capture_for_enrollment(self, cp_id: str, token: str) -> bool:
         """Capture a token and return whether normal authorization must be denied."""
@@ -607,9 +627,10 @@ class AuthorizationManager:
             persistent_notification.async_create(
                 self.hass,
                 f"Card {mask_token(token)} was read by charger {cp_id}. {assignment}",
-                title="OCPP RFID card captured",
+                title="HA OCPP RFID card captured",
                 notification_id=self._notification_id(cp_id),
             )
+        async_dispatcher_send(self.hass, DASHBOARD_UPDATED)
         return True
 
     def _notification_id(self, cp_id: str) -> str:

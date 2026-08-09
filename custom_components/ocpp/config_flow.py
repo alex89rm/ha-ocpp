@@ -53,6 +53,7 @@ from .const import (
     CONF_WEBSOCKET_PING_INTERVAL,
     CONF_WEBSOCKET_PING_TIMEOUT,
     CONF_WEBSOCKET_PING_TRIES,
+    CONF_WALLBOX_PROFILE,
     DEFAULT_CPID,
     DEFAULT_CSID,
     DEFAULT_CHARGING_RATE_UNITS,
@@ -76,10 +77,18 @@ from .const import (
     DEFAULT_WEBSOCKET_PING_INTERVAL,
     DEFAULT_WEBSOCKET_PING_TIMEOUT,
     DEFAULT_WEBSOCKET_PING_TRIES,
+    DEFAULT_WALLBOX_PROFILE,
     DOMAIN,
     MEASURANDS,
     OCPP_VERSIONS,
 )
+from .wallbox_profiles import AUTO_PROFILE_ID, profile_catalog
+
+
+WALLBOX_PROFILE_OPTIONS = {
+    AUTO_PROFILE_ID: "Automatic",
+    **{item["id"]: item["name"] for item in profile_catalog()},
+}
 
 
 def _central_system_schema(
@@ -154,6 +163,9 @@ STEP_USER_CP_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_IDLE_INTERVAL, default=DEFAULT_IDLE_INTERVAL): vol.All(
             int, vol.Range(min=0)
         ),
+        vol.Optional(CONF_WALLBOX_PROFILE, default=DEFAULT_WALLBOX_PROFILE): vol.In(
+            WALLBOX_PROFILE_OPTIONS
+        ),
         vol.Required(
             CONF_SKIP_SCHEMA_VALIDATION, default=DEFAULT_SKIP_SCHEMA_VALIDATION
         ): bool,
@@ -188,7 +200,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for OCPP."""
 
     VERSION = 2
-    MINOR_VERSION = 2
+    MINOR_VERSION = 3
     CONNECTION_CLASS = CONN_CLASS_LOCAL_PUSH
 
     def __init__(self):
@@ -221,7 +233,9 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=STEP_USER_CS_DATA_SCHEMA,
             errors=errors,
-            description_placeholders={"docs_url": "https://github.com/lbbrhzn/ocpp"},
+            description_placeholders={
+                "docs_url": "https://github.com/alex89rm/ha-ocpp"
+            },
         )
 
     async def async_step_reconfigure(self, user_input=None) -> ConfigFlowResult:
@@ -254,7 +268,9 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=self.add_suggested_values_to_schema(
                 STEP_USER_CS_DATA_SCHEMA, entry.data
             ),
-            description_placeholders={"docs_url": "https://github.com/lbbrhzn/ocpp"},
+            description_placeholders={
+                "docs_url": "https://github.com/alex89rm/ha-ocpp"
+            },
         )
 
     async def async_step_integration_discovery(
@@ -348,7 +364,9 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="cp_user",
             data_schema=STEP_USER_CP_DATA_SCHEMA,
             errors=errors,
-            description_placeholders={"docs_url": "https://github.com/lbbrhzn/ocpp"},
+            description_placeholders={
+                "docs_url": "https://github.com/alex89rm/ha-ocpp"
+            },
         )
 
     async def async_step_measurands(self, user_input=None):
@@ -1122,6 +1140,10 @@ class OCPPOptionsFlow(OptionsFlow):
                     CONF_IDLE_INTERVAL,
                     default=current.get(CONF_IDLE_INTERVAL, DEFAULT_IDLE_INTERVAL),
                 ): vol.All(int, vol.Range(min=0)),
+                vol.Optional(
+                    CONF_WALLBOX_PROFILE,
+                    default=current.get(CONF_WALLBOX_PROFILE, DEFAULT_WALLBOX_PROFILE),
+                ): vol.In(WALLBOX_PROFILE_OPTIONS),
                 vol.Required(
                     CONF_SKIP_SCHEMA_VALIDATION,
                     default=current.get(

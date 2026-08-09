@@ -45,7 +45,9 @@ CONF_WEBSOCKET_CLOSE_TIMEOUT = "websocket_close_timeout"
 CONF_WEBSOCKET_PING_TRIES = "websocket_ping_tries"
 CONF_WEBSOCKET_PING_INTERVAL = "websocket_ping_interval"
 CONF_WEBSOCKET_PING_TIMEOUT = "websocket_ping_timeout"
+CONF_WALLBOX_PROFILE = "wallbox_profile"
 DATA_UPDATED = "ocpp_data_updated"
+DASHBOARD_UPDATED = "ha_ocpp_dashboard_updated"
 DEFAULT_CSID = "central"
 DEFAULT_CPID = "charger"
 DEFAULT_HOST = "0.0.0.0"
@@ -78,6 +80,7 @@ DEFAULT_WEBSOCKET_CLOSE_TIMEOUT = 10
 DEFAULT_WEBSOCKET_PING_TRIES = 2
 DEFAULT_WEBSOCKET_PING_INTERVAL = 20
 DEFAULT_WEBSOCKET_PING_TIMEOUT = 20
+DEFAULT_WALLBOX_PROFILE = "auto"
 DOMAIN = "ocpp"
 CONFIG = "config"
 ICON = "mdi:ev-station"
@@ -213,6 +216,7 @@ class ChargerSystemSettings:
     charging_rate_units: str = DEFAULT_CHARGING_RATE_UNITS
     connection: int | None = None  # number of this connection in central server
     num_connectors: int = DEFAULT_NUM_CONNECTORS
+    wallbox_profile: str = DEFAULT_WALLBOX_PROFILE
 
 
 @dataclass

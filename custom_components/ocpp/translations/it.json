@@ -1,4 +1,13 @@
 {
+    "config": {
+        "step": {
+            "cp_user": {
+                "data": {
+                    "wallbox_profile": "Profilo wallbox"
+                }
+            }
+        }
+    },
     "exceptions": {
         "rfid_enrollment_in_progress": {
             "message": "È già in corso un apprendimento RFID per questa wallbox"
@@ -18,6 +27,11 @@
                 "description": "Seleziona le impostazioni della wallbox oppure gestisci l'autorizzazione centrale.",
                 "data": {
                     "target": "Elemento da configurare"
+                }
+            },
+            "cp_settings": {
+                "data": {
+                    "wallbox_profile": "Profilo wallbox"
                 }
             },
             "authorization": {

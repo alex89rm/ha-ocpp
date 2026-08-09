@@ -28,6 +28,7 @@
                     "cpid": "Charge point identity",
                     "max_current": "Maximum charging current",
                     "max_power": "Maximum charging power",
+                    "wallbox_profile": "Wallbox profile",
                     "meter_interval": "Charging sample interval (seconds)",
                     "monitored_variables_autoconfig": "Automatic detection of OCPP Measurands",
                     "idle_interval": "Idle MeterValues refresh interval (seconds, 0 disables)",
@@ -301,6 +302,7 @@
                 "data": {
                     "max_current": "Maximum charging current",
                     "max_power": "Maximum charging power",
+                    "wallbox_profile": "Wallbox profile",
                     "meter_interval": "Charging sample interval (seconds)",
                     "monitored_variables_autoconfig": "Automatic detection of OCPP Measurands",
                     "idle_interval": "Idle MeterValues refresh interval (seconds, 0 disables)",

@@ -12,6 +12,7 @@ import voluptuous as vol
 from ocpp.v16.enums import AuthorizationStatus
 
 from .api import CentralSystem
+from .dashboard import async_setup_dashboard
 from .const import (
     CONF_AUTH_LIST,
     CONF_AUTH_STATUS,
@@ -40,6 +41,7 @@ from .const import (
     CONF_WEBSOCKET_PING_TRIES,
     CONF_WEBSOCKET_PING_INTERVAL,
     CONF_WEBSOCKET_PING_TIMEOUT,
+    CONF_WALLBOX_PROFILE,
     CONFIG,
     DEFAULT_CPID,
     DEFAULT_IDLE_INTERVAL,
@@ -62,6 +64,7 @@ from .const import (
     DEFAULT_WEBSOCKET_PING_TRIES,
     DEFAULT_WEBSOCKET_PING_INTERVAL,
     DEFAULT_WEBSOCKET_PING_TIMEOUT,
+    DEFAULT_WALLBOX_PROFILE,
     DOMAIN,
     PLATFORMS,
 )
@@ -111,6 +114,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType):
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
     hass.data[DOMAIN][CONFIG] = ocpp_config
+    await async_setup_dashboard(hass)
     _LOGGER.info("OCPP YAML configuration loaded")
     return True
 
@@ -215,7 +219,7 @@ async def async_migrate_entry(hass, config_entry: ConfigEntry):
             config_entry, data=new_data, minor_version=0, version=2
         )
 
-    if config_entry.version == 2 and config_entry.minor_version < 2:
+    if config_entry.version == 2 and config_entry.minor_version < 3:
         data = {**config_entry.data}
         cpids = data.get(CONF_CPIDS, [])
 
@@ -228,6 +232,7 @@ async def async_migrate_entry(hass, config_entry: ConfigEntry):
                 CONF_NUM_CONNECTORS: DEFAULT_NUM_CONNECTORS,
                 CONF_MAX_POWER: DEFAULT_MAX_POWER,
                 CONF_CHARGING_RATE_UNITS: DEFAULT_CHARGING_RATE_UNITS,
+                CONF_WALLBOX_PROFILE: DEFAULT_WALLBOX_PROFILE,
             }
             missing = {
                 key: value for key, value in defaults.items() if key not in cp_data
@@ -243,14 +248,14 @@ async def async_migrate_entry(hass, config_entry: ConfigEntry):
                 config_entry,
                 data=data,
                 version=2,
-                minor_version=2,
+                minor_version=3,
             )
         else:
             hass.config_entries.async_update_entry(
                 config_entry,
                 data=data,
                 version=2,
-                minor_version=2,
+                minor_version=3,
             )
 
     _LOGGER.info(

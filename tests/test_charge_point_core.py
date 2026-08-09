@@ -185,6 +185,7 @@ async def test_async_update_device_info_updates_metrics_and_registry(hass):
     assert cp._metrics[(0, cdet.vendor.value)].value == "Acme"
     assert cp._metrics[(0, cdet.firmware_version.value)].value == "1.2.3"
     assert cp._metrics[(0, cdet.serial.value)].value == "SER123"
+    assert cp.wallbox_profile.profile_id == "generic.ocpp"
 
     from homeassistant.helpers import device_registry
 
@@ -194,6 +195,59 @@ async def test_async_update_device_info_updates_metrics_and_registry(hass):
     assert dev.manufacturer == "Acme"
     assert dev.model == "Model X"
     assert dev.sw_version == "1.2.3"
+
+
+async def test_async_update_device_info_selects_autel_profile(hass):
+    """Device identity updates activate the matching wallbox module."""
+    entry = MockConfigEntry(domain=DOMAIN, data={}, entry_id="e2", title="e2")
+    entry.add_to_hass(hass)
+    central = CentralSystemSettings(
+        csid="cs",
+        host="127.0.0.1",
+        port=9999,
+        ssl=False,
+        ssl_certfile_path="",
+        ssl_keyfile_path="",
+        websocket_close_timeout=1,
+        websocket_ping_interval=1,
+        websocket_ping_timeout=1,
+        websocket_ping_tries=0,
+    )
+    charger = ChargerSystemSettings(
+        cpid="autel",
+        max_current=32,
+        idle_interval=60,
+        meter_interval=60,
+        monitored_variables="",
+        monitored_variables_autoconfig=False,
+        skip_schema_validation=False,
+        force_smart_charging=False,
+    )
+
+    class DummyConn:
+        """Minimal connection for profile selection."""
+
+        state = None
+
+    cp = ChargePoint(
+        id="AUTEL_CP",
+        connection=DummyConn(),
+        version=OcppVersion.V16,
+        hass=hass,
+        entry=entry,
+        central=central,
+        charger=charger,
+    )
+
+    await cp.async_update_device_info(
+        serial="",
+        vendor="Autel",
+        model="MaxiChargerAC",
+        firmware_version="V1.51.00",
+    )
+
+    assert cp.wallbox_profile.profile_id == "autel.maxicharger"
+    assert cp.wallbox_identity.model == "MaxiChargerAC"
 
 
 def test_get_ha_metric_prefers_exact_entity(hass):

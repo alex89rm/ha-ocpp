@@ -1,19 +1,49 @@
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/custom-components/hacs)
-[![codecov](https://codecov.io/gh/lbbrhzn/ocpp/branch/main/graph/badge.svg?token=3FRJIF5KRW)](https://codecov.io/gh/lbbrhzn/ocpp)
-[![Documentation Status](https://readthedocs.org/projects/home-assistant-ocpp/badge/?version=latest)](https://home-assistant-ocpp.readthedocs.io/en/latest/?badge=latest)
-[![hacs_downloads](https://img.shields.io/github/downloads/lbbrhzn/ocpp/latest/total)](https://github.com/lbbrhzn/ocpp/releases/latest)
+# HA OCPP
 
-![OCPP](https://github.com/home-assistant/brands/raw/master/custom_integrations/ocpp/icon.png)
+HA OCPP is a Home Assistant-native OCPP server for managing charging stations,
+users, RFID credentials, measurements, and charging limits from one operational
+panel.
 
-This is a Home Assistant integration for Electric Vehicle chargers that support the following Open Charge Point Protocols 1.6j, 2.0.1 and 2.1 (experimental).
+The integration currently supports OCPP 1.6J, OCPP 2.0.1, and experimental
+OCPP 2.1 through the Python [`ocpp`](https://github.com/mobilityhouse/ocpp)
+package.
 
-* based on the [Python OCPP Package](https://github.com/mobilityhouse/ocpp).
-* HACS compliant repository 
+## Product Direction
 
-Documentation can be found here [home-assistant-ocpp.readthedocs.io](https://home-assistant-ocpp.readthedocs.io)
+- A complete HA OCPP sidebar panel for wallboxes, users, RFID, and server setup.
+- A generic standards-based implementation that works without vendor code.
+- Small, declarative wallbox profiles for verified product behavior and bounded
+  protocol quirks.
+- Automatic profile selection from BootNotification vendor and model metadata,
+  with an explicit administrator override.
+- Station-wide persistent current or power limits based on the charging-rate
+  units advertised by each OCPP 1.6 charger.
+- Separate current limits for every connector on multi-connector stations.
 
-**💡 Tip:** If you like this project consider buying me a coffee or a cocktail:
+The Autel MaxiCharger AC profile includes hardware-verified handling for its
+phase-voltage noise floor and for persistent station-wide power limits using
+`ChargePointMaxProfile`, `Absolute`, `W`, and connector `0`.
 
-<a href="https://www.buymeacoffee.com/lbbrhzn" target="_blank">
-  <img src="https://cdn.buymeacoffee.com/buttons/default-black.png" alt="Buy Me A Coffee" width="150px">
-</a>
+## Installation
+
+1. Add `https://github.com/alex89rm/ha-ocpp` to HACS as a custom integration
+   repository.
+2. Install **HA OCPP** and restart Home Assistant.
+3. Add the HA OCPP integration from **Settings > Devices & services**.
+4. Open **HA OCPP** from the Home Assistant sidebar.
+
+The integration domain remains `ocpp` so existing configuration entries,
+entities, services, and automations can migrate without being recreated.
+
+## Architecture
+
+See [Architecture](docs/architecture.md) and
+[Wallbox profiles](docs/wallbox-profiles.md). Product-specific assets can be
+added independently of protocol behavior.
+
+## Project History
+
+HA OCPP began from the MIT-licensed `lbbrhzn/ocpp` Home Assistant integration.
+It is now developed and released independently and has no runtime dependency on
+that repository. The original copyright and MIT attribution are retained in
+[LICENSE](LICENSE).

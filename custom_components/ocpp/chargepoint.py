@@ -3,6 +3,7 @@
 import asyncio
 from collections import defaultdict
 from collections.abc import MutableMapping
+from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
 import logging
@@ -346,7 +347,10 @@ class ChargePoint(cp):
 
             accepted_measurands: str = await self.get_supported_measurands()
             charging_rate_units: str = await self.get_supported_charging_rate_units()
-            updated_entry = {**self.entry.data}
+            # ConfigEntry data is nested. Mutating a shallow copy also mutates the
+            # stored data, so Home Assistant cannot detect the change and reload
+            # capability-dependent entities.
+            updated_entry = deepcopy(dict(self.entry.data))
             for i in range(len(updated_entry[CONF_CPIDS])):
                 if self.id in updated_entry[CONF_CPIDS][i]:
                     s = updated_entry[CONF_CPIDS][i][self.id]
@@ -360,7 +364,10 @@ class ChargePoint(cp):
                         s[CONF_CHARGING_RATE_UNITS] = charging_rate_units
                     break
             # if an entry differs this will unload/reload and stop/restart the central system/websocket
-            self.hass.config_entries.async_update_entry(self.entry, data=updated_entry)
+            if updated_entry != self.entry.data:
+                self.hass.config_entries.async_update_entry(
+                    self.entry, data=updated_entry
+                )
 
             await self.set_standard_configuration()
 

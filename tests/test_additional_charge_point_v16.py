@@ -941,7 +941,14 @@ async def test_session_energy_get_energy_kwh_exception_ignored(
 async def test_session_energy_meter_start_cast_exception(
     hass, socket_enabled, cp_id, port, setup_config_entry
 ):
-    """Test session energy path when meter_start cannot be cast to float."""
+    """Test session energy path when meter_start cannot be subtracted."""
+
+    class NonSubtractableMeterStart:
+        """Remain valid to HA's sensor check while failing arithmetic."""
+
+        def __float__(self):
+            return 0.0
+
     cs = setup_config_entry
     async with websockets.connect(
         f"ws://127.0.0.1:{port}/{cp_id}", subprotocols=["ocpp1.6"]
@@ -952,8 +959,11 @@ async def test_session_energy_meter_start_cast_exception(
             await cp.send_boot_notification()
             await wait_ready(cs.charge_points[cp_id])
             srv = cs.charge_points[cp_id]
-            # Poison meter_start with a non-float so that float() raises
-            srv._metrics[(1, "Energy.Meter.Start")].value = object()
+            # Poison meter_start so session-energy subtraction raises without
+            # also leaving an invalid numeric sensor state in Home Assistant.
+            meter_start = srv._metrics[(1, "Energy.Meter.Start")]
+            original_meter_start = meter_start.value
+            meter_start.value = NonSubtractableMeterStart()
 
             mv = call.MeterValues(
                 connector_id=1,
@@ -976,6 +986,8 @@ async def test_session_energy_meter_start_cast_exception(
             # No crash is sufficient to cover lines 1023-1024
             assert True
         finally:
+            if "meter_start" in locals():
+                meter_start.value = original_meter_start
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task

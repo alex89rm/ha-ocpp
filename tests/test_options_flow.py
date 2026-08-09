@@ -1,4 +1,4 @@
-"""The options flow for editing an already-configured charge point.
+"""The options flow for editing a central system or configured charge point.
 
 The initial charger form (async_step_cp_user) is reachable only from
 integration discovery, and discovery aborts for a charger that is already
@@ -18,11 +18,17 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from homeassistant import data_entry_flow
 
+from custom_components.ocpp.config_flow import (
+    OPTIONS_TARGET,
+    OPTIONS_TARGET_CENTRAL_SYSTEM,
+)
 from custom_components.ocpp.const import (
     CONF_CPID,
     CONF_CPIDS,
     CONF_CHARGING_RATE_UNITS,
+    CONF_CSID,
     CONF_FORCE_SMART_CHARGING,
+    CONF_HOST,
     CONF_IDLE_INTERVAL,
     CONF_MAX_CURRENT,
     CONF_MAX_POWER,
@@ -30,7 +36,16 @@ from custom_components.ocpp.const import (
     CONF_MONITORED_VARIABLES,
     CONF_MONITORED_VARIABLES_AUTOCONFIG,
     CONF_NUM_CONNECTORS,
+    CONF_OCPP_VERSION,
+    CONF_PORT,
     CONF_SKIP_SCHEMA_VALIDATION,
+    CONF_SSL,
+    CONF_SSL_CERTFILE_PATH,
+    CONF_SSL_KEYFILE_PATH,
+    CONF_WEBSOCKET_CLOSE_TIMEOUT,
+    CONF_WEBSOCKET_PING_INTERVAL,
+    CONF_WEBSOCKET_PING_TIMEOUT,
+    CONF_WEBSOCKET_PING_TRIES,
     DEFAULT_CHARGING_RATE_UNITS,
     DEFAULT_MAX_POWER,
     DOMAIN,
@@ -86,14 +101,38 @@ def _form_fields(result):
     return {str(key) for key in result["data_schema"].schema}
 
 
-async def test_a_single_charger_skips_the_picker(hass):
-    """With one charge point there is nothing to choose; go straight to it."""
+async def _open_cp_settings(hass, entry, cp_id="CP_1"):
+    """Open the settings form for one charge point."""
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    return await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={OPTIONS_TARGET: cp_id}
+    )
+
+
+async def _open_server_settings(hass, entry):
+    """Open the settings form for the central system."""
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    return await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={OPTIONS_TARGET: OPTIONS_TARGET_CENTRAL_SYSTEM},
+    )
+
+
+def _target_values(result):
+    """Return the values offered by the target selector."""
+    validator = next(iter(result["data_schema"].schema.values()))
+    return set(validator.container)
+
+
+async def test_a_single_charger_offers_server_and_charger(hass):
+    """The server remains selectable even when there is only one charger."""
     entry = _entry(hass, [{"CP_1": _cp_settings()}])
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
 
     assert result["type"] == data_entry_flow.FlowResultType.FORM
-    assert result["step_id"] == "cp_settings"
+    assert result["step_id"] == "init"
+    assert _target_values(result) == {OPTIONS_TARGET_CENTRAL_SYSTEM, "CP_1"}
 
 
 async def test_cpid_is_not_editable(hass):
@@ -104,7 +143,7 @@ async def test_cpid_is_not_editable(hass):
     """
     entry = _entry(hass, [{"CP_1": _cp_settings()}])
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_cp_settings(hass, entry)
 
     assert CONF_CPID not in _form_fields(result)
     assert result["description_placeholders"] == {
@@ -123,7 +162,7 @@ async def test_editing_settings_preserves_what_the_form_does_not_show(hass):
     """
     entry = _entry(hass, [{"CP_1": _cp_settings()}])
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_cp_settings(hass, entry)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
@@ -167,7 +206,7 @@ async def test_the_entry_is_updated_exactly_once(hass):
     listener = AsyncMock()
     entry.add_update_listener(listener)
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_cp_settings(hass, entry)
     await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
@@ -198,7 +237,7 @@ async def test_autoconfig_left_on_does_not_reseed_measurands(hass):
         [{"CP_1": _cp_settings(**{CONF_MONITORED_VARIABLES: "Power.Active.Import"})}],
     )
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_cp_settings(hass, entry)
     await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
@@ -223,7 +262,7 @@ async def test_autoconfig_off_offers_the_stored_measurands(hass):
     """
     entry = _entry(hass, [{"CP_1": _cp_settings()}])
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_cp_settings(hass, entry)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
@@ -268,7 +307,7 @@ async def test_selecting_no_measurands_is_rejected(hass):
     """
     entry = _entry(hass, [{"CP_1": _cp_settings()}])
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_cp_settings(hass, entry)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
@@ -309,7 +348,7 @@ async def test_multiple_chargers_get_a_picker_and_only_the_picked_one_changes(ha
     assert result["step_id"] == "init"
 
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={"cp_id": "CP_2"}
+        result["flow_id"], user_input={OPTIONS_TARGET: "CP_2"}
     )
     assert result["step_id"] == "cp_settings"
     assert result["description_placeholders"]["cpid"] == "second_cpid"
@@ -345,7 +384,7 @@ async def test_updates_landing_between_steps_are_not_clobbered(hass):
     """
     entry = _entry(hass, [{"CP_1": _cp_settings()}])
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_cp_settings(hass, entry)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
@@ -386,14 +425,56 @@ async def test_updates_landing_between_steps_are_not_clobbered(hass):
     assert stored[CONF_MONITORED_VARIABLES_AUTOCONFIG] is False
 
 
-async def test_no_chargers_means_nothing_to_configure(hass):
-    """A central system nothing has connected to yet aborts cleanly."""
+async def test_server_remains_configurable_without_chargers(hass):
+    """A newly configured listener is useful before a charger connects."""
     entry = _entry(hass, [])
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
 
-    assert result["type"] == data_entry_flow.FlowResultType.ABORT
-    assert result["reason"] == "no_charge_points"
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "init"
+    assert _target_values(result) == {OPTIONS_TARGET_CENTRAL_SYSTEM}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={OPTIONS_TARGET: OPTIONS_TARGET_CENTRAL_SYSTEM},
+    )
+    assert result["step_id"] == "server_settings"
+
+
+async def test_server_settings_are_editable_without_changing_its_identity(hass):
+    """Listener settings can change while csid and charger records stay stable."""
+    cpids = [{"CP_1": _cp_settings()}]
+    entry = _entry(hass, cpids)
+
+    result = await _open_server_settings(hass, entry)
+
+    assert result["step_id"] == "server_settings"
+    assert CONF_CSID not in _form_fields(result)
+    assert CONF_CPIDS not in _form_fields(result)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_HOST: "0.0.0.0",
+            CONF_PORT: 9010,
+            CONF_SSL: False,
+            CONF_SSL_CERTFILE_PATH: "/config/cert.pem",
+            CONF_SSL_KEYFILE_PATH: "/config/key.pem",
+            CONF_OCPP_VERSION: "1.6",
+            CONF_WEBSOCKET_CLOSE_TIMEOUT: 5,
+            CONF_WEBSOCKET_PING_TRIES: 2,
+            CONF_WEBSOCKET_PING_INTERVAL: 15,
+            CONF_WEBSOCKET_PING_TIMEOUT: 10,
+        },
+    )
+
+    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
+    assert entry.data[CONF_HOST] == "0.0.0.0"
+    assert entry.data[CONF_PORT] == 9010
+    assert entry.data[CONF_OCPP_VERSION] == "1.6"
+    assert entry.data[CONF_CSID] == MOCK_CONFIG_CS[CONF_CSID]
+    assert entry.data[CONF_CPIDS] == cpids
 
 
 async def test_the_form_defaults_are_the_stored_values(hass):
@@ -419,7 +500,7 @@ async def test_the_form_defaults_are_the_stored_values(hass):
         ],
     )
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_cp_settings(hass, entry)
 
     defaults = {str(key): key.default() for key in result["data_schema"].schema}
     assert defaults[CONF_MAX_CURRENT] == 63

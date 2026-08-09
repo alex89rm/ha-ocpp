@@ -2072,12 +2072,12 @@ async def test_on_diagnostics_status_notification(
 
             async def fake_notify(msg: str, title: str = "Ocpp integration"):
                 # record the message; return True like the real notifier
+                captured["called"] += 1
                 captured["msg"] = msg
                 return True
 
-            def fake_async_create_task(coro):
-                # actually schedule the coroutine so fake_notify runs
-                captured["called"] += 1
+            def fake_async_create_task(coro, *_args, **_kwargs):
+                # Keep Home Assistant's current task-creation call signature.
                 return asyncio.create_task(coro)
 
             monkeypatch.setattr(srv_cp, "notify_ha", fake_notify, raising=True)
@@ -2105,13 +2105,23 @@ async def test_on_diagnostics_status_notification(
 
 @pytest.mark.timeout(30)
 @pytest.mark.parametrize(
-    "setup_config_entry",
-    [{"port": 9077, "cp_id": "CP_phases", "cms": "cms_phases"}],
-    indirect=True,
+    "setup_config_entry,cp_id,port,num_connectors",
+    [
+        (
+            {"port": 9077, "cp_id": "CP_phases_1", "cms": "cms_phases_1"},
+            "CP_phases_1",
+            9077,
+            1,
+        ),
+        (
+            {"port": 9420, "cp_id": "CP_phases_2", "cms": "cms_phases_2"},
+            "CP_phases_2",
+            9420,
+            2,
+        ),
+    ],
+    indirect=["setup_config_entry"],
 )
-@pytest.mark.parametrize("cp_id", ["CP_phases"])
-@pytest.mark.parametrize("port", [9077])
-@pytest.mark.parametrize("num_connectors", [1, 2])
 async def test_current_import_phase_extra_attrs_single_and_multi_connector(
     hass, socket_enabled, cp_id, port, setup_config_entry, num_connectors
 ):

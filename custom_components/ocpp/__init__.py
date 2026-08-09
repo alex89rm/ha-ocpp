@@ -114,7 +114,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     dr.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, central_sys.id)},
-        name=central_sys.id,
+        name=f"OCPP Central System ({central_sys.id})",
         model="OCPP Central System",
     )
 
@@ -132,8 +132,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     hass.data[DOMAIN][entry.entry_id] = central_sys
 
-    if entry.data[CONF_CPIDS]:
-        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    # The sensor platform also provides the central-system diagnostic entity,
+    # so it must be loaded even before the first charger is discovered.
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
@@ -259,13 +260,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # print(hass.services.async_services_for_domain(DOMAIN))
             for service in hass.services.async_services_for_domain(DOMAIN):
                 hass.services.async_remove(DOMAIN, service)
-            # Unload platforms if a charger connected
-            if central_sys.connections == 0:
-                unloaded = True
-            else:
-                unloaded = await hass.config_entries.async_unload_platforms(
-                    entry, PLATFORMS
-                )
+            unloaded = await hass.config_entries.async_unload_platforms(
+                entry, PLATFORMS
+            )
             # Remove entry
             if unloaded:
                 hass.data[DOMAIN].pop(entry.entry_id)

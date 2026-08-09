@@ -49,7 +49,7 @@
                     "max_current": "Maximum charging current",
                     "meter_interval": "Charging sample interval (seconds)",
                     "monitored_variables_autoconfig": "Automatic detection of OCPP Measurands",
-                    "idle_interval": "Charger idle sampling interval (seconds)",
+                    "idle_interval": "Idle MeterValues refresh interval (seconds, 0 disables)",
                     "skip_schema_validation": "Skip OCPP schema validation",
                     "force_smart_charging": "Force Smart Charging feature profile"
                 }
@@ -125,7 +125,7 @@
                     "max_current": "Maximum charging current",
                     "meter_interval": "Charging sample interval (seconds)",
                     "monitored_variables_autoconfig": "Automatic detection of OCPP Measurands",
-                    "idle_interval": "Charger idle sampling interval (seconds)",
+                    "idle_interval": "Idle MeterValues refresh interval (seconds, 0 disables)",
                     "skip_schema_validation": "Skip OCPP schema validation",
                     "force_smart_charging": "Force Smart Charging feature profile"
                 }

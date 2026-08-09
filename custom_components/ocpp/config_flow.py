@@ -95,7 +95,9 @@ STEP_USER_CP_DATA_SCHEMA = vol.Schema(
             default=DEFAULT_MONITORED_VARIABLES_AUTOCONFIG,
         ): bool,
         vol.Required(CONF_METER_INTERVAL, default=DEFAULT_METER_INTERVAL): int,
-        vol.Required(CONF_IDLE_INTERVAL, default=DEFAULT_IDLE_INTERVAL): int,
+        vol.Required(CONF_IDLE_INTERVAL, default=DEFAULT_IDLE_INTERVAL): vol.All(
+            int, vol.Range(min=0)
+        ),
         vol.Required(
             CONF_SKIP_SCHEMA_VALIDATION, default=DEFAULT_SKIP_SCHEMA_VALIDATION
         ): bool,
@@ -437,7 +439,7 @@ class OCPPOptionsFlow(OptionsFlow):
                 vol.Required(
                     CONF_IDLE_INTERVAL,
                     default=current.get(CONF_IDLE_INTERVAL, DEFAULT_IDLE_INTERVAL),
-                ): int,
+                ): vol.All(int, vol.Range(min=0)),
                 vol.Required(
                     CONF_SKIP_SCHEMA_VALIDATION,
                     default=current.get(

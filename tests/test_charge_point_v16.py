@@ -136,6 +136,8 @@ test_switches.__test__ = False
 async def test_buttons(hass, cpid, socket_enabled):
     """Test button operations."""
     for button in BUTTONS:
+        if button.rfid_enrollment:
+            continue
         await press_button(hass, cpid, button.key)
 
 
@@ -1635,15 +1637,6 @@ async def test_get_authorization_status_with_auth_list(
     """Exercise ChargePoint.get_authorization_status() when an auth_list is configured."""
     cs: CentralSystem = setup_config_entry
 
-    from custom_components.ocpp.const import (
-        DOMAIN,
-        CONFIG,
-        CONF_DEFAULT_AUTH_STATUS,
-        CONF_AUTH_LIST,
-        CONF_ID_TAG,
-        CONF_AUTH_STATUS,
-    )
-
     # Start a minimal client so the server-side CP is registered.
     async with websockets.connect(
         f"ws://127.0.0.1:{port}/{cp_id}", subprotocols=["ocpp1.6"]
@@ -1660,17 +1653,14 @@ async def test_get_authorization_status_with_auth_list(
 
     srv_cp = cs.charge_points[cp_id]
 
-    # Configure default + auth_list in HA config dict
-    hass.data[DOMAIN][CONFIG][CONF_DEFAULT_AUTH_STATUS] = (
-        AuthorizationStatus.blocked.value
+    # Configure the central system's persistent authorization registry.
+    await cs.authorization.async_set_registered_only(True)
+    expired_user = await cs.authorization.async_add_user("Expired user")
+    await cs.authorization.async_assign_token(
+        expired_user,
+        "TAG_PRESENT",
+        authorization_status=AuthorizationStatus.expired.value,
     )
-    hass.data[DOMAIN][CONFIG][CONF_AUTH_LIST] = [
-        {
-            CONF_ID_TAG: "TAG_PRESENT",
-            CONF_AUTH_STATUS: AuthorizationStatus.expired.value,
-        },
-        {CONF_ID_TAG: "TAG_NO_STATUS"},  # should fall back to default
-    ]
 
     # 1) Early return path: remote id tag
     srv_cp._remote_id_tag = "REMOTE123"
@@ -1685,16 +1675,31 @@ async def test_get_authorization_status_with_auth_list(
         == AuthorizationStatus.expired.value
     )
 
-    # 3) Match in auth_list without explicit status -> default
+    # 3) Not found in the registry -> registered-only default
     assert (
         srv_cp.get_authorization_status("TAG_NO_STATUS")
-        == AuthorizationStatus.blocked.value
+        == AuthorizationStatus.invalid.value
     )
 
     # 4) Not found in auth_list -> default
     assert (
-        srv_cp.get_authorization_status("UNKNOWN") == AuthorizationStatus.blocked.value
+        srv_cp.get_authorization_status("UNKNOWN") == AuthorizationStatus.invalid.value
     )
+
+    # Enrollment intercepts Authorize and still rejects a direct
+    # StartTransaction from a charger using local pre-authorization.
+    enrollment = cs.authorization.start_enrollment(cp_id)
+    authorize_result = srv_cp.on_authorize("LEARN-ME")
+    assert authorize_result.id_tag_info["status"] == AuthorizationStatus.invalid.value
+    assert (await enrollment).token == "LEARN-ME"
+
+    transaction_result = srv_cp.on_start_transaction(
+        connector_id=1,
+        id_tag="LEARN-ME",
+        meter_start=0,
+    )
+    assert transaction_result.transaction_id == 0
+    assert transaction_result.id_tag_info["status"] == AuthorizationStatus.invalid.value
 
 
 @pytest.mark.timeout(20)

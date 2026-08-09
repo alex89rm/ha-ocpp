@@ -9,6 +9,7 @@ import homeassistant.const as ha
 from ocpp.v16.enums import Measurand, UnitOfMeasure
 
 CONF_AUTH_LIST = "authorization_list"
+CONF_AUTHORIZATION_REQUIRED = "authorization_required"
 CONF_AUTH_STATUS = "authorization_status"
 CONF_CPI = "charge_point_identity"
 CONF_CPID = "cpid"

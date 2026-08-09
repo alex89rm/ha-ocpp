@@ -27,6 +27,18 @@ OCPP integration can automatically detect supported measurands. However, some ch
 
 For chargers with multiple connectors (outlets), the OCPP integration will create one device per connector, named `charger Connector 1`, `charger Connector 2` etc. All measurands and other entities (buttons, numbers, switches, diagnostics sensors) that are connector-specific per the OCPP standard will be found on these devices.
 
+## Managing authorization and RFID cards
+
+Open the OCPP integration, choose **Configure**, then select **Authorization and RFID cards**. Users and their cards are stored by the integration and can be managed without restarting the OCPP server.
+
+By default, the integration keeps the historical behaviour and accepts unknown credentials. Enable **Allow only registered credentials** in the authorization policy after adding the users and cards that should be allowed to charge.
+
+To add a card, create or select a user, choose **Add RFID card**, select a connected charger, and present the card within 60 seconds. The learning scan is deliberately rejected and cannot start a charge. Confirm the masked card identifier before assigning it. A card can belong to only one user; moving it to another user requires explicit confirmation.
+
+Each charger also exposes a **Learn RFID** configuration button. It opens the same 60-second safe learning window and stores an unknown scan as unassigned. Home Assistant shows a persistent notification, and the card can then be assigned from the authorization settings.
+
+Authorization is evaluated by the central system for OCPP 1.6 and 2.0.1. After a policy, user, or card changes, the integration asks all connected chargers to clear their authorization caches. Charger-side offline authorization settings can still affect what a disconnected charger permits.
+
 ## Understanding status
 
 Your charger exposes a connector status sensor:

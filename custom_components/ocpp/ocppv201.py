@@ -5,7 +5,7 @@ import contextlib
 from datetime import datetime, UTC
 from dataclasses import dataclass, field
 import logging
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTime
@@ -38,6 +38,7 @@ from ocpp.v201.enums import (
     ChargingProfileKindEnumType,
     ChargingProfileStatusEnumType,
     ClearChargingProfileStatusEnumType,
+    ClearCacheStatusEnumType,
 )
 
 from .chargepoint import (
@@ -60,6 +61,9 @@ from .const import (
     DOMAIN,
     HA_ENERGY_UNIT,
 )
+
+if TYPE_CHECKING:
+    from .authorization import AuthorizationManager
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
@@ -109,6 +113,7 @@ class ChargePoint(cp):
         entry: ConfigEntry,
         central: CentralSystemSettings,
         charger: ChargerSystemSettings,
+        authorization: AuthorizationManager | None = None,
     ):
         """Instantiate a ChargePoint."""
 
@@ -120,6 +125,7 @@ class ChargePoint(cp):
             entry,
             central,
             charger,
+            authorization,
         )
         self._tx_start_time = {}
         self._global_to_evse: dict[int, tuple[int, int]] = {}
@@ -127,6 +133,11 @@ class ChargePoint(cp):
         self._pending_status_notifications: list[tuple[str, str, int, int]] = []
         self._connector_status = []
         self._evse_status_v16: dict[int, ChargePointStatusv16] = {}
+
+    async def clear_authorization_cache(self) -> bool:
+        """Clear authorization data cached by the charger."""
+        response = await self.call(call.ClearCache())
+        return response.status == ClearCacheStatusEnumType.accepted.value
 
     # --- Connector mapping helpers (EVSE <-> global index) ---
     def _build_connector_map(self) -> bool:
@@ -1199,11 +1210,11 @@ class ChargePoint(cp):
         status: str = AuthorizationStatusEnumType.unknown.value
         token_type: str = id_token["type"]
         token: str = id_token["id_token"]
-        if (
-            (token_type == IdTokenEnumType.iso14443)
-            or (token_type == IdTokenEnumType.iso15693)
-            or (token_type == IdTokenEnumType.central)
-        ):
+        if token_type in {
+            IdTokenEnumType.iso14443.value,
+            IdTokenEnumType.iso15693.value,
+            IdTokenEnumType.central.value,
+        }:
             status = self.get_authorization_status(token)
         return call_result.Authorize(id_token_info={"status": status})
 
@@ -1340,7 +1351,16 @@ class ChargePoint(cp):
         response = call_result.TransactionEvent()
         id_token = kwargs.get("id_token")
         if id_token:
-            response.id_token_info = {"status": AuthorizationStatusEnumType.accepted}
+            token_type = id_token["type"]
+            token = id_token["id_token"]
+            status = AuthorizationStatusEnumType.unknown.value
+            if token_type in {
+                IdTokenEnumType.iso14443.value,
+                IdTokenEnumType.iso15693.value,
+                IdTokenEnumType.central.value,
+            }:
+                status = self.get_authorization_status(token)
+            response.id_token_info = {"status": status}
             id_tag_string: str = id_token["type"] + ":" + id_token["id_token"]
             self._metrics[(global_idx, cstat.id_tag.value)].value = id_tag_string
 

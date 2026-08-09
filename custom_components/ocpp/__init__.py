@@ -72,19 +72,34 @@ AUTH_LIST_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_ID_TAG): cv.string,
         vol.Optional(CONF_NAME): cv.string,
-        vol.Optional(CONF_AUTH_STATUS): cv.string,
+        vol.Optional(CONF_AUTH_STATUS): vol.In(
+            [status.value for status in AuthorizationStatus]
+        ),
     }
 )
 
-CONFIG_SCHEMA = vol.Schema(
+
+def _authorization_list(value):
+    """Normalize both historical list and documented keyed-map YAML."""
+    if isinstance(value, dict):
+        value = list(value.values())
+    if not isinstance(value, list):
+        raise vol.Invalid("authorization_list must be a list or mapping")
+    return [AUTH_LIST_SCHEMA(item) for item in value]
+
+
+OCPP_CONFIG_SCHEMA = vol.Schema(
     {
         vol.Optional(
             CONF_DEFAULT_AUTH_STATUS, default=AuthorizationStatus.accepted.value
-        ): cv.string,
-        vol.Optional(CONF_AUTH_LIST, default={}): vol.Schema(
-            {cv.string: AUTH_LIST_SCHEMA}
-        ),
+        ): vol.In([status.value for status in AuthorizationStatus]),
+        vol.Optional(CONF_AUTH_LIST, default=[]): _authorization_list,
     },
+    extra=vol.ALLOW_EXTRA,
+)
+
+CONFIG_SCHEMA = vol.Schema(
+    {vol.Optional(DOMAIN): OCPP_CONFIG_SCHEMA},
     extra=vol.ALLOW_EXTRA,
 )
 
@@ -96,7 +111,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType):
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
     hass.data[DOMAIN][CONFIG] = ocpp_config
-    _LOGGER.info(f"config = {ocpp_config}")
+    _LOGGER.info("OCPP YAML configuration loaded")
     return True
 
 
@@ -254,6 +269,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if entry.entry_id in hass.data[DOMAIN]:
             # Close server
             central_sys = hass.data[DOMAIN][entry.entry_id]
+            await central_sys.authorization.async_shutdown()
             central_sys._server.close()
             await central_sys._server.wait_closed()
             # Unload services

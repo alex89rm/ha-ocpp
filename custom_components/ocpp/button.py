@@ -12,12 +12,14 @@ from homeassistant.components.button import (
     ButtonEntityDescription,
 )
 from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.util import slugify
 
 from .api import CentralSystem
+from .authorization import EnrollmentInProgressError
 from .const import (
     CONF_CPID,
     CONF_CPIDS,
@@ -35,6 +37,7 @@ class OcppButtonDescription(ButtonEntityDescription):
 
     press_action: str | None = None
     per_connector: bool = False
+    rfid_enrollment: bool = False
 
 
 BUTTONS: Final = [
@@ -45,6 +48,14 @@ BUTTONS: Final = [
         entity_category=EntityCategory.CONFIG,
         press_action=HAChargerServices.service_reset.name,
         per_connector=False,
+    ),
+    OcppButtonDescription(
+        key="learn_rfid",
+        translation_key="learn_rfid",
+        device_class=None,
+        entity_category=EntityCategory.CONFIG,
+        per_connector=False,
+        rfid_enrollment=True,
     ),
     OcppButtonDescription(
         key="unlock",
@@ -149,7 +160,10 @@ class ChargePointButton(ButtonEntity):
         if self.connector_id:
             parts.insert(3, f"conn{self.connector_id}")
         self._attr_unique_id = ".".join(parts)
-        self._attr_name = self.entity_description.name
+        if self.entity_description.translation_key:
+            self._attr_has_entity_name = True
+        else:
+            self._attr_name = self.entity_description.name
         if self.connector_id:
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, f"{cpid}-conn{self.connector_id}")},
@@ -174,6 +188,15 @@ class ChargePointButton(ButtonEntity):
 
     async def async_press(self) -> None:
         """Triggers the charger press action service."""
+        if self.entity_description.rfid_enrollment:
+            try:
+                await self.central_system.start_rfid_enrollment(self.cpid)
+            except EnrollmentInProgressError as err:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="rfid_enrollment_in_progress",
+                ) from err
+            return
         await self.central_system.set_charger_state(
             self.cpid,
             self.entity_description.press_action,

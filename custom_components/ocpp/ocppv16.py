@@ -115,6 +115,11 @@ class ChargePoint(cp):
         self._active_tx: dict[int, int] = {}  # connector_id -> transaction_id
         self._idle_meter_values_lock = asyncio.Lock()
 
+    async def post_connect(self):
+        """Configure the charger and refresh restored measurements."""
+        await super().post_connect()
+        await self._request_idle_meter_values()
+
     def _has_active_transaction(self) -> bool:
         """Return whether any connector has an active transaction."""
         return any(self._active_tx.values()) or bool(self.active_transaction_id)

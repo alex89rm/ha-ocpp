@@ -633,6 +633,7 @@ async def websocket_authorization_command(
         return
     if clear_all_caches:
         for cp_id in central.charge_points:
+            await central.apply_authorization_policy(cp_id)
             await central.clear_authorization_cache(cp_id)
     async_dispatcher_send(hass, DASHBOARD_UPDATED)
     connection.send_result(msg["id"], {"success": True})

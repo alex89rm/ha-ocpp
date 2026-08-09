@@ -22,6 +22,7 @@ def test_autel_maxicharger_is_identified_from_boot_metadata():
     assert profile.profile_id == "autel.maxicharger"
     assert profile.hardware_verified is True
     assert profile.charging_limit_strategy == "charge_point_max_profile_absolute"
+    assert profile.product_image == ("/ha_ocpp_static/assets/autel-maxicharger-ac.jpg")
 
 
 def test_profile_matching_normalizes_vendor_and_model_tokens():

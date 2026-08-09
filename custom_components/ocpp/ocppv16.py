@@ -78,6 +78,15 @@ _LOGGER: logging.Logger = logging.getLogger(__package__)
 MIN_IDLE_METER_VALUES_INTERVAL = 10
 POST_TRANSACTION_METER_VALUES_DELAY = 1
 
+REGISTERED_ONLY_CONFIGURATION = (
+    (ckey.allow_offline_tx_for_unknown_id.value, "false"),
+    (ckey.authorization_cache_enabled.value, "false"),
+    (ckey.local_authorize_offline.value, "false"),
+    (ckey.local_pre_authorize.value, "false"),
+    (ckey.local_auth_list_enabled.value, "false"),
+    (ckey.stop_transaction_on_invalid_id.value, "true"),
+)
+
 
 def _to_message_trigger(name: str) -> MessageTrigger | None:
     if isinstance(name, MessageTrigger):
@@ -226,6 +235,40 @@ class ChargePoint(cp):
         """Clear authorization data cached by the charger."""
         response = await self.call(call.ClearCache())
         return response.status == ClearCacheStatus.accepted.value
+
+    async def apply_authorization_policy(self) -> dict[str, bool]:
+        """Make the central registry authoritative in registered-only mode."""
+        if self.authorization is None or not self.authorization.registered_only:
+            return {}
+
+        results: dict[str, bool] = {}
+        rejected_results = {
+            "Unknown",
+            ConfigurationStatus.rejected,
+            ConfigurationStatus.not_supported,
+        }
+        for key, value in REGISTERED_ONLY_CONFIGURATION:
+            try:
+                response = await self.configure(key, value)
+            except Exception:
+                _LOGGER.warning(
+                    "Unable to enforce registered-only authorization setting %s=%s",
+                    key,
+                    value,
+                    exc_info=True,
+                )
+                results[key] = False
+            else:
+                results[key] = response not in rejected_results
+
+        if not all(results.values()):
+            _LOGGER.warning(
+                "Charger %s does not support every setting required for "
+                "central-only authorization: %s",
+                self.id,
+                ", ".join(key for key, accepted in results.items() if not accepted),
+            )
+        return results
 
     async def get_supported_measurands(self) -> str:
         """Get comma-separated list of measurands supported by the charger."""

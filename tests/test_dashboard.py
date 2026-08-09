@@ -145,6 +145,9 @@ def test_dashboard_snapshot_exposes_profile_and_each_connector(hass, monkeypatch
 
     assert wallbox["profile"]["id"] == "autel.maxicharger"
     assert wallbox["profile"]["hardware_verified"] is True
+    assert wallbox["profile"]["product_image"] == (
+        "/ha_ocpp_static/assets/autel-maxicharger-ac.jpg"
+    )
     assert wallbox["supported_rate_units"] == ["Current", "Power"]
     assert [connector["id"] for connector in wallbox["connectors"]] == [1, 2]
     assert RAW_TOKEN not in json.dumps(snapshot)

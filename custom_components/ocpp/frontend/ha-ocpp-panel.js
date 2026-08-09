@@ -74,6 +74,7 @@ const TEXT = {
     updated: "Modifica applicata",
     error: "Operazione non riuscita",
     connectedStations: "Wallbox connesse",
+    activeServers: "Server attivi",
     allServers: "Tutti i server",
   },
   en: {
@@ -151,6 +152,7 @@ const TEXT = {
     updated: "Change applied",
     error: "Operation failed",
     connectedStations: "Connected wallboxes",
+    activeServers: "Active servers",
     allServers: "All servers",
   },
 };
@@ -361,7 +363,7 @@ class HaOcppPanel extends HTMLElement {
         ${this._summary("mdi:ev-station", t.connectedStations, connected, wallboxes.length)}
         ${this._summary("mdi:account-group-outline", t.registeredUsers, users)}
         ${this._summary("mdi:card-account-details-outline", t.pendingCards, pending)}
-        ${this._summary("mdi:server-network", t.server, entries.filter((e) => e.server.running).length, entries.length)}
+        ${this._summary("mdi:server-network", t.activeServers, entries.filter((e) => e.server.running).length)}
       </section>
       <section class="section-block">
         <div class="section-title"><h2>${t.wallboxes}</h2></div>

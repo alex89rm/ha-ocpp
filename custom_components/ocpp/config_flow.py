@@ -820,6 +820,9 @@ class OCPPOptionsFlow(OptionsFlow):
 
         async def _clear(cp_id: str) -> None:
             try:
+                apply_policy = getattr(central, "apply_authorization_policy", None)
+                if apply_policy is not None:
+                    await asyncio.wait_for(apply_policy(cp_id), timeout=20)
                 await asyncio.wait_for(
                     central.clear_authorization_cache(cp_id), timeout=10
                 )

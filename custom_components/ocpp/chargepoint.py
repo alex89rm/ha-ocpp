@@ -383,6 +383,7 @@ class ChargePoint(cp):
                 )
 
             await self.set_standard_configuration()
+            await self.apply_authorization_policy()
 
             self.post_connect_success = True
             _LOGGER.debug("'%s' post connection setup completed successfully", self.id)
@@ -506,6 +507,10 @@ class ChargePoint(cp):
     async def clear_authorization_cache(self) -> bool:
         """Clear authorization data cached by the charger."""
         return False
+
+    async def apply_authorization_policy(self) -> dict[str, bool]:
+        """Apply protocol-specific settings required by the access policy."""
+        return {}
 
     async def _get_specific_response(self, unique_id, timeout):
         # The ocpp library silences CallErrors by default. See

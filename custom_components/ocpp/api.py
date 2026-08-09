@@ -690,6 +690,13 @@ class CentralSystem:
             )
             return False
 
+    async def apply_authorization_policy(self, id: str) -> dict[str, bool]:
+        """Apply the active access policy to one connected charger."""
+        cp_id = self.cpids.get(id, id)
+        if cp_id not in self.charge_points:
+            return {}
+        return await self.charge_points[cp_id].apply_authorization_policy()
+
     async def set_max_charge_rate_amps(
         self, id: str, value: float, connector_id: int = 0
     ):

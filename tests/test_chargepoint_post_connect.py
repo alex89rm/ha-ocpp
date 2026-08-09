@@ -70,6 +70,10 @@ async def test_post_connect_persists_detected_units_without_mutating_entry_data(
     monkeypatch.setattr(
         charge_point, "set_standard_configuration", AsyncMock(return_value=None)
     )
+    apply_authorization_policy = AsyncMock(return_value={})
+    monkeypatch.setattr(
+        charge_point, "apply_authorization_policy", apply_authorization_policy
+    )
     monkeypatch.setattr(charge_point, "set_availability", AsyncMock(return_value=False))
     monkeypatch.setattr(charge_point, "update", AsyncMock(return_value=None))
 
@@ -82,3 +86,4 @@ async def test_post_connect_persists_detected_units_without_mutating_entry_data(
         entry.data[CONF_CPIDS][0]["CP_1"][CONF_CHARGING_RATE_UNITS]
         == CHARGING_RATE_UNIT_POWER
     )
+    apply_authorization_policy.assert_awaited_once_with()

@@ -31,7 +31,18 @@ const TEXT = {
     voltage: "Tensione",
     start: "Avvia",
     stop: "Ferma",
-    unlock: "Sblocca",
+    unlock: "Sblocca connettore",
+    available: "Disponibile",
+    preparing: "Veicolo collegato",
+    charging: "In carica",
+    suspendedEv: "Sospesa dal veicolo",
+    suspendedEvse: "Sospesa dalla wallbox",
+    finishing: "Completamento",
+    reserved: "Riservata",
+    unavailable: "Non disponibile",
+    faulted: "Errore",
+    occupied: "Occupata",
+    unknownState: "Stato sconosciuto",
     enable: "Rendi disponibile",
     disable: "Rendi non disponibile",
     settings: "Impostazioni",
@@ -74,7 +85,6 @@ const TEXT = {
     updated: "Modifica applicata",
     error: "Operazione non riuscita",
     connectedStations: "Wallbox connesse",
-    activeServers: "Server attivi",
     allServers: "Tutti i server",
   },
   en: {
@@ -109,7 +119,18 @@ const TEXT = {
     voltage: "Voltage",
     start: "Start",
     stop: "Stop",
-    unlock: "Unlock",
+    unlock: "Unlock connector",
+    available: "Available",
+    preparing: "Vehicle connected",
+    charging: "Charging",
+    suspendedEv: "Paused by vehicle",
+    suspendedEvse: "Paused by wallbox",
+    finishing: "Finishing",
+    reserved: "Reserved",
+    unavailable: "Unavailable",
+    faulted: "Fault",
+    occupied: "Occupied",
+    unknownState: "Unknown state",
     enable: "Make available",
     disable: "Make unavailable",
     settings: "Settings",
@@ -152,7 +173,6 @@ const TEXT = {
     updated: "Change applied",
     error: "Operation failed",
     connectedStations: "Connected wallboxes",
-    activeServers: "Active servers",
     allServers: "All servers",
   },
 };
@@ -363,7 +383,6 @@ class HaOcppPanel extends HTMLElement {
         ${this._summary("mdi:ev-station", t.connectedStations, connected, wallboxes.length)}
         ${this._summary("mdi:account-group-outline", t.registeredUsers, users)}
         ${this._summary("mdi:card-account-details-outline", t.pendingCards, pending)}
-        ${this._summary("mdi:server-network", t.activeServers, entries.filter((e) => e.server.running).length)}
       </section>
       <section class="section-block">
         <div class="section-title"><h2>${t.wallboxes}</h2></div>
@@ -377,13 +396,82 @@ class HaOcppPanel extends HTMLElement {
     return `<article class="summary"><ha-icon icon="${icon}"></ha-icon><div><span>${label}</span><strong>${value}${total === null ? "" : `<small> / ${total}</small>`}</strong></div></article>`;
   }
 
+  _normalizedStatus(value) {
+    return String(value || "").toLowerCase().replaceAll(/[^a-z0-9]/g, "");
+  }
+
+  _statusInfo(value, connected = true) {
+    const t = this._t;
+    if (!connected) {
+      return { key: "offline", label: t.offline, icon: "mdi:lan-disconnect" };
+    }
+    const key = this._normalizedStatus(value);
+    const states = {
+      available: { label: t.available, icon: "mdi:check-circle-outline" },
+      preparing: { label: t.preparing, icon: "mdi:ev-plug-type2" },
+      charging: { label: t.charging, icon: "mdi:flash" },
+      suspendedev: { label: t.suspendedEv, icon: "mdi:pause-circle-outline" },
+      suspendedevse: { label: t.suspendedEvse, icon: "mdi:pause-circle-outline" },
+      finishing: { label: t.finishing, icon: "mdi:battery-sync-outline" },
+      reserved: { label: t.reserved, icon: "mdi:calendar-lock-outline" },
+      unavailable: { label: t.unavailable, icon: "mdi:block-helper" },
+      faulted: { label: t.faulted, icon: "mdi:alert-circle-outline" },
+      occupied: { label: t.occupied, icon: "mdi:car-electric" },
+    };
+    const state = states[key];
+    return state
+      ? { key, ...state }
+      : { key: "unknown", label: value || t.unknownState, icon: "mdi:help-circle-outline" };
+  }
+
+  _wallboxState(wallbox) {
+    if (!wallbox.connected) return this._statusInfo(null, false);
+    const connectorStates = (wallbox.connectors || []).map((connector) => ({
+      raw: connector.status,
+      key: this._normalizedStatus(connector.status),
+    }));
+    const priority = [
+      "faulted",
+      "charging",
+      "suspendedevse",
+      "suspendedev",
+      "preparing",
+      "finishing",
+      "occupied",
+      "reserved",
+      "unavailable",
+      "available",
+    ];
+    const selected = priority
+      .map((key) => connectorStates.find((state) => state.key === key))
+      .find(Boolean);
+    return this._statusInfo(selected?.raw || wallbox.status, true);
+  }
+
+  _stateBadge(state, extraClass = "") {
+    return `<span class="wallbox-state state-${state.key} ${extraClass}"><ha-icon icon="${state.icon}"></ha-icon>${this._escape(state.label)}</span>`;
+  }
+
+  _wallboxSubtitle(wallbox) {
+    const identity = wallbox.identity || {};
+    const vendor = identity.vendor || wallbox.profile?.manufacturer || "OCPP";
+    const cpid = String(wallbox.cpid || "").trim();
+    const duplicateValues = [vendor, identity.model]
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter(Boolean);
+    return duplicateValues.includes(cpid.toLowerCase()) || !cpid
+      ? vendor
+      : `${vendor} · ${cpid}`;
+  }
+
   _wallboxOverviewRow(wallbox) {
     const t = this._t;
     const identity = wallbox.identity;
+    const state = this._wallboxState(wallbox);
     return `<article class="overview-row">
       ${this._productVisual(wallbox)}
-      <div class="overview-main"><strong>${this._escape(identity.model || wallbox.cpid)}</strong><span>${this._escape(identity.vendor || wallbox.profile.manufacturer || "OCPP")} · ${this._escape(wallbox.cpid)}</span></div>
-      <span class="status ${wallbox.connected ? "online" : "offline"}"><i></i>${wallbox.connected ? t.online : t.offline}</span>
+      <div class="overview-main"><strong>${this._escape(identity.model || wallbox.cpid)}</strong><span>${this._escape(this._wallboxSubtitle(wallbox))}</span></div>
+      ${this._stateBadge(state)}
       <div class="overview-metric"><span>${t.power}</span><strong>${this._metric(wallbox.connectors[0]?.power)}</strong></div>
       <button class="icon-button" title="${t.wallboxes}" data-open-wallbox="${this._escape(wallbox.cpid)}"><ha-icon icon="mdi:chevron-right"></ha-icon></button>
     </article>`;
@@ -412,6 +500,7 @@ class HaOcppPanel extends HTMLElement {
   _wallboxCard(wallbox) {
     const t = this._t;
     const identity = wallbox.identity;
+    const state = this._wallboxState(wallbox);
     const entryId = wallbox.entry_id;
     const profileOptions = [
       { id: "auto", name: t.automatic },
@@ -420,14 +509,14 @@ class HaOcppPanel extends HTMLElement {
     return `<article class="wallbox-card" data-wallbox="${this._escape(wallbox.cpid)}">
       <div class="wallbox-head">
         ${this._productVisual(wallbox)}
-        <div class="wallbox-title"><h2>${this._escape(identity.model || wallbox.cpid)}</h2><p>${this._escape(identity.vendor || wallbox.profile.manufacturer || "OCPP")} · ${this._escape(wallbox.cpid)}</p></div>
-        <span class="status ${wallbox.connected ? "online" : "offline"}"><i></i>${wallbox.connected ? t.online : t.offline}</span>
+        <div class="wallbox-title"><h2>${this._escape(identity.model || wallbox.cpid)}</h2><p>${this._escape(this._wallboxSubtitle(wallbox))}</p></div>
+        ${this._stateBadge(state)}
       </div>
       <div class="identity-grid">
         <div><span>${t.profile}</span><strong>${this._escape(wallbox.profile.name)}</strong>${wallbox.profile.hardware_verified ? `<small class="verified"><ha-icon icon="mdi:check-decagram"></ha-icon>${t.verified}</small>` : ""}</div>
         <div><span>${t.firmware}</span><strong>${this._escape(identity.firmware_version || "-")}</strong></div>
         <div><span>${t.protocol}</span><strong>${this._escape(wallbox.protocol || "-")}</strong></div>
-        <div><span>${t.status}</span><strong>${this._escape(wallbox.status || "-")}</strong></div>
+        <div><span>${t.status}</span><strong>${this._escape(state.label)}</strong></div>
       </div>
       <div class="control-band">
         <div class="section-title"><h3>${t.stationLimits}</h3></div>
@@ -483,10 +572,25 @@ class HaOcppPanel extends HTMLElement {
 
   _connector(wallbox, connector) {
     const t = this._t;
-    const charging = String(connector.status || "").toLowerCase() === "charging";
+    const state = this._statusInfo(connector.status, wallbox.connected);
+    const availableActions = connector.actions || [];
+    const canStart = availableActions.includes("start");
+    const canStop = availableActions.includes("stop");
+    const canUnlock = availableActions.includes("unlock");
+    const actions = [
+      canStart
+        ? `<button class="secondary connector-command" data-action="start" data-entry-id="${this._escape(wallbox.entry_id)}" data-cpid="${this._escape(wallbox.cpid)}" data-connector-id="${connector.id}"><ha-icon icon="mdi:play"></ha-icon>${t.start}</button>`
+        : "",
+      canStop
+        ? `<button class="secondary danger-command connector-command" data-action="stop" data-entry-id="${this._escape(wallbox.entry_id)}" data-cpid="${this._escape(wallbox.cpid)}" data-connector-id="${connector.id}"><ha-icon icon="mdi:stop"></ha-icon>${t.stop}</button>`
+        : "",
+      canUnlock
+        ? `<button class="icon-button connector-command" title="${t.unlock}" data-action="unlock" data-entry-id="${this._escape(wallbox.entry_id)}" data-cpid="${this._escape(wallbox.cpid)}" data-connector-id="${connector.id}"><ha-icon icon="mdi:lock-open-variant-outline"></ha-icon></button>`
+        : "",
+    ].join("");
     const showConnectorLimit = wallbox.connectors.length > 1;
     return `<section class="connector-row">
-      <div class="connector-header"><div><ha-icon icon="mdi:ev-plug-type2"></ha-icon><h3>${t.connector} ${connector.id}</h3></div><span class="connector-status ${charging ? "charging" : ""}">${this._escape(connector.status || "-")}</span></div>
+      <div class="connector-header"><div><ha-icon icon="mdi:ev-plug-type2"></ha-icon><h3>${t.connector} ${connector.id}</h3></div>${this._stateBadge(state, "connector-state")}</div>
       <div class="metrics-grid">
         ${this._metricCell("mdi:flash", t.power, connector.power)}
         ${this._metricCell("mdi:current-ac", t.current, connector.current)}
@@ -494,11 +598,7 @@ class HaOcppPanel extends HTMLElement {
         ${this._metricCell("mdi:lightning-bolt-circle", t.sessionEnergy, connector.session_energy)}
       </div>
       ${showConnectorLimit ? `<div class="connector-limit">${this._limitControl(wallbox, "Current", connector.id)}</div>` : ""}
-      <div class="connector-actions">
-        <button class="secondary connector-command" data-action="start" data-entry-id="${this._escape(wallbox.entry_id)}" data-cpid="${this._escape(wallbox.cpid)}" data-connector-id="${connector.id}"><ha-icon icon="mdi:play"></ha-icon>${t.start}</button>
-        <button class="secondary connector-command" data-action="stop" data-entry-id="${this._escape(wallbox.entry_id)}" data-cpid="${this._escape(wallbox.cpid)}" data-connector-id="${connector.id}"><ha-icon icon="mdi:stop"></ha-icon>${t.stop}</button>
-        <button class="icon-button connector-command" title="${t.unlock}" data-action="unlock" data-entry-id="${this._escape(wallbox.entry_id)}" data-cpid="${this._escape(wallbox.cpid)}" data-connector-id="${connector.id}"><ha-icon icon="mdi:lock-open-variant-outline"></ha-icon></button>
-      </div>
+      ${actions ? `<div class="connector-actions">${actions}</div>` : ""}
     </section>`;
   }
 
@@ -695,7 +795,7 @@ class HaOcppPanel extends HTMLElement {
       .page-heading p { margin-top:4px; color:var(--secondary-text-color); }
       .actions-heading { align-items:center; }
       .heading-actions, .row-actions, .connector-actions, .modal-actions, .form-actions { display:flex; align-items:center; gap:8px; }
-      .summary-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px; }
+      .summary-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
       .summary { min-height:100px; display:flex; align-items:center; gap:16px; padding:18px; background:var(--card-background-color, #fff); border:1px solid var(--divider-color, #ddd); border-radius:8px; }
       .summary > ha-icon { width:36px; height:36px; color:var(--primary-color, #0288d1); }
       .summary div { min-width:0; display:flex; flex-direction:column; gap:6px; }
@@ -706,10 +806,10 @@ class HaOcppPanel extends HTMLElement {
       .section-title { min-height:30px; display:flex; align-items:center; gap:8px; margin-bottom:10px; }
       .count { min-width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; color:var(--secondary-text-color); background:var(--secondary-background-color); border-radius:12px; font-size:12px; }
       .compact-list, .user-list, .pending-list, .server-list { display:flex; flex-direction:column; gap:10px; }
-      .overview-row { min-height:78px; display:grid; grid-template-columns:52px minmax(180px, 1fr) auto minmax(120px, .35fr) 40px; align-items:center; gap:14px; padding:12px 14px; background:var(--card-background-color, #fff); border:1px solid var(--divider-color, #ddd); border-radius:8px; }
-      .product-visual { width:52px; height:52px; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:6px; background:var(--secondary-background-color, #f2f3f4); }
+      .overview-row { min-height:102px; display:grid; grid-template-columns:76px minmax(180px, 1fr) auto minmax(120px, .35fr) 40px; align-items:center; gap:16px; padding:12px 14px; background:var(--card-background-color, #fff); border:1px solid var(--divider-color, #ddd); border-radius:8px; }
+      .product-visual { width:76px; height:76px; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:6px; background:#fff; }
       .product-visual img { width:100%; height:100%; object-fit:contain; }
-      .product-visual ha-icon { width:30px; height:30px; color:#367e89; }
+      .product-visual ha-icon { width:36px; height:36px; color:#367e89; }
       .overview-main { min-width:0; display:flex; flex-direction:column; gap:4px; }
       .overview-main strong, .overview-main span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
       .overview-main span, .overview-metric span { color:var(--secondary-text-color); font-size:12px; }
@@ -718,10 +818,19 @@ class HaOcppPanel extends HTMLElement {
       .status i { width:8px; height:8px; border-radius:50%; background:#9e9e9e; }
       .status.online { color:#217a4b; }
       .status.online i { background:#2eaf68; }
+      .wallbox-state { min-height:34px; display:inline-flex; align-items:center; justify-content:center; gap:7px; justify-self:start; padding:0 10px; color:#556166; background:color-mix(in srgb, currentColor 9%, transparent); border:1px solid color-mix(in srgb, currentColor 32%, transparent); border-radius:6px; font-size:12px; font-weight:700; white-space:nowrap; }
+      .wallbox-state ha-icon { width:18px; height:18px; }
+      .wallbox-state.state-available { color:#287582; }
+      .wallbox-state.state-preparing, .wallbox-state.state-occupied { color:#3766a0; }
+      .wallbox-state.state-charging { color:#217a4b; }
+      .wallbox-state.state-suspendedev, .wallbox-state.state-suspendedevse { color:#8a6200; }
+      .wallbox-state.state-finishing, .wallbox-state.state-reserved { color:#715486; }
+      .wallbox-state.state-faulted { color:#b3261e; }
+      .wallbox-state.state-unavailable, .wallbox-state.state-offline, .wallbox-state.state-unknown { color:#687277; }
       .wallbox-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 580px), 1fr)); gap:16px; }
       .wallbox-card { overflow:hidden; background:var(--card-background-color, #fff); border:1px solid var(--divider-color, #ddd); border-radius:8px; }
-      .wallbox-head { min-height:88px; display:grid; grid-template-columns:60px minmax(0, 1fr) auto; align-items:center; gap:14px; padding:16px 18px; border-bottom:1px solid var(--divider-color, #ddd); }
-      .wallbox-head .product-visual { width:60px; height:60px; }
+      .wallbox-head { min-height:116px; display:grid; grid-template-columns:88px minmax(0, 1fr) auto; align-items:center; gap:16px; padding:14px 18px; border-bottom:1px solid var(--divider-color, #ddd); }
+      .wallbox-head .product-visual { width:88px; height:88px; }
       .wallbox-title { min-width:0; }
       .wallbox-title h2, .wallbox-title p { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
       .wallbox-title p { margin-top:4px; color:var(--secondary-text-color); font-size:13px; }
@@ -748,8 +857,7 @@ class HaOcppPanel extends HTMLElement {
       .connector-header { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; }
       .connector-header > div { display:flex; align-items:center; gap:8px; }
       .connector-header ha-icon { color:#367e89; }
-      .connector-status { color:var(--secondary-text-color); font-size:12px; }
-      .connector-status.charging { color:#217a4b; font-weight:600; }
+      .connector-state { min-height:30px; padding:0 9px; }
       .metrics-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:8px; }
       .metric { min-width:0; display:grid; grid-template-columns:22px 1fr; gap:1px 6px; align-items:center; }
       .metric ha-icon { grid-row:1 / 3; width:20px; height:20px; color:var(--secondary-text-color); }
@@ -771,6 +879,8 @@ class HaOcppPanel extends HTMLElement {
       .primary, .secondary, .icon-button { min-height:40px; display:inline-flex; align-items:center; justify-content:center; gap:7px; border-radius:5px; }
       .primary { padding:0 14px; color:#fff; background:var(--primary-color, #0288d1); border:1px solid var(--primary-color, #0288d1); font-weight:600; }
       .secondary { padding:0 13px; color:var(--primary-text-color); background:transparent; border:1px solid var(--divider-color, #aaa); }
+      .secondary.danger-command { color:#b3261e; border-color:color-mix(in srgb, #b3261e 48%, var(--divider-color, #aaa)); }
+      .secondary.danger-command:hover { background:color-mix(in srgb, #b3261e 8%, transparent); }
       .icon-button { width:40px; padding:0; color:var(--secondary-text-color); background:transparent; border:1px solid transparent; }
       .icon-button:hover { background:var(--secondary-background-color, #f5f5f5); }
       .icon-button.danger { color:#b3261e; }
@@ -825,7 +935,6 @@ class HaOcppPanel extends HTMLElement {
       .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
       @keyframes spin { to { transform:rotate(360deg); } }
       @media (max-width:900px) {
-        .summary-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
         .identity-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
         .server-form { grid-template-columns:repeat(2, minmax(140px, 1fr)); }
         .credential-row { grid-template-columns:100px minmax(110px, 1fr) 110px 38px 36px 36px; }
@@ -845,13 +954,16 @@ class HaOcppPanel extends HTMLElement {
         .summary { min-height:84px; padding:12px; gap:10px; }
         .summary > ha-icon { width:28px; height:28px; }
         .summary strong { font-size:20px; }
-        .overview-row { grid-template-columns:46px minmax(0, 1fr) 40px; gap:10px; }
-        .overview-row .product-visual { width:46px; height:46px; }
-        .overview-row .status, .overview-row .overview-metric { grid-column:2; }
-        .overview-row .icon-button { grid-column:3; grid-row:1 / 3; }
-        .wallbox-head { grid-template-columns:52px minmax(0, 1fr); padding:14px; }
-        .wallbox-head .product-visual { width:52px; height:52px; }
-        .wallbox-head .status { grid-column:2; }
+        .overview-row { grid-template-columns:60px minmax(0, 1fr) 40px; gap:8px 12px; }
+        .overview-row .product-visual { width:60px; height:60px; grid-column:1; grid-row:1 / 4; }
+        .overview-row .overview-main { grid-column:2; grid-row:1; }
+        .overview-row .wallbox-state { grid-column:2; grid-row:2; }
+        .overview-row .overview-metric { grid-column:2; grid-row:3; }
+        .overview-row .icon-button { grid-column:3; grid-row:1 / 4; }
+        .wallbox-head { grid-template-columns:68px minmax(0, 1fr); gap:10px 14px; padding:14px; }
+        .wallbox-head .product-visual { width:68px; height:68px; grid-column:1; grid-row:1 / 3; }
+        .wallbox-head .wallbox-title { grid-column:2; grid-row:1; }
+        .wallbox-head .wallbox-state { grid-column:2; grid-row:2; }
         .identity-grid { padding:12px 14px; }
         .control-band, .connector-row { padding:14px; }
         .limit-grid { grid-template-columns:1fr; }

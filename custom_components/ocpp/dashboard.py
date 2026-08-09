@@ -73,6 +73,24 @@ PANEL_REGISTERED = "dashboard_registered"
 PANEL_DIRECTORY = Path(__file__).parent / "frontend"
 
 
+def _available_connector_actions(status: Any, connected: bool) -> tuple[str, ...]:
+    """Return commands that make sense for the connector's current state."""
+    if not connected:
+        return ()
+    normalized = "".join(
+        character for character in str(status or "").casefold() if character.isalnum()
+    )
+    if normalized in {"charging", "suspendedev", "suspendedevse"}:
+        return ("stop",)
+    if normalized == "preparing":
+        return ("start", "unlock")
+    if normalized == "finishing":
+        return ("unlock",)
+    if normalized in {"", "available"}:
+        return ("start",)
+    return ()
+
+
 def _central_systems(hass: HomeAssistant) -> list[CentralSystem]:
     """Return every loaded HA OCPP central system."""
     return [
@@ -198,11 +216,15 @@ def _wallbox_snapshot(
 
     connectors = []
     for connector_id in range(1, connector_count + 1):
+        connector_status = central.get_metric(
+            cpid, cstat.status_connector.value, connector_id=connector_id
+        )
         connectors.append(
             {
                 "id": connector_id,
-                "status": central.get_metric(
-                    cpid, cstat.status_connector.value, connector_id=connector_id
+                "status": connector_status,
+                "actions": list(
+                    _available_connector_actions(connector_status, connected)
                 ),
                 "transaction_id": central.get_metric(
                     cpid, csess.transaction_id.value, connector_id=connector_id

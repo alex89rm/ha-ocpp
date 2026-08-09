@@ -17,6 +17,6 @@ AUTEL_MAXICHARGER_PROFILE = WallboxProfile(
         "persistent_charge_point_max_profile",
         "rfid",
     ),
-    product_image="/ha_ocpp_static/assets/autel-maxicharger-ac.jpg",
+    product_image="/ha_ocpp_static/assets/autel-maxicharger-ac.png",
     hardware_verified=True,
 )

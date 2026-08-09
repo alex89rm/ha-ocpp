@@ -18,6 +18,7 @@ from custom_components.ocpp.const import (
 )
 from custom_components.ocpp.dashboard import (
     WALLBOX_COMMAND_SCHEMA,
+    _available_connector_actions,
     _safe_authorization_snapshot,
     dashboard_snapshot,
 )
@@ -87,6 +88,24 @@ def test_wallbox_command_schema_rejects_negative_connector():
         )
 
 
+@pytest.mark.parametrize(
+    ("status", "connected", "actions"),
+    [
+        ("Available", True, ("start",)),
+        ("Preparing", True, ("start", "unlock")),
+        ("Charging", True, ("stop",)),
+        ("SuspendedEV", True, ("stop",)),
+        ("SuspendedEVSE", True, ("stop",)),
+        ("Finishing", True, ("unlock",)),
+        ("Faulted", True, ()),
+        ("Available", False, ()),
+    ],
+)
+def test_connector_actions_follow_the_operational_state(status, connected, actions):
+    """The dashboard must not offer contradictory connector commands."""
+    assert _available_connector_actions(status, connected) == actions
+
+
 def test_dashboard_snapshot_exposes_profile_and_each_connector(hass, monkeypatch):
     """The normalized API preserves station and per-connector controls."""
     identity = WallboxIdentity(
@@ -125,6 +144,10 @@ def test_dashboard_snapshot_exposes_profile_and_each_connector(hass, monkeypatch
         websocket_ping_tries=2,
         websocket_close_timeout=10,
     )
+
+    def get_metric(_cpid, metric, **_kwargs):
+        return "Charging" if metric == "Status.Connector" else 230
+
     central = SimpleNamespace(
         entry=entry,
         id="central",
@@ -133,7 +156,7 @@ def test_dashboard_snapshot_exposes_profile_and_each_connector(hass, monkeypatch
         charge_points={"AUTEL_CP": charge_point},
         authorization=_authorization_manager(),
         get_available=lambda *_args, **_kwargs: True,
-        get_metric=lambda *_args, **_kwargs: 230,
+        get_metric=get_metric,
         get_ha_unit=lambda *_args, **_kwargs: "V",
     )
     monkeypatch.setattr(
@@ -146,8 +169,12 @@ def test_dashboard_snapshot_exposes_profile_and_each_connector(hass, monkeypatch
     assert wallbox["profile"]["id"] == "autel.maxicharger"
     assert wallbox["profile"]["hardware_verified"] is True
     assert wallbox["profile"]["product_image"] == (
-        "/ha_ocpp_static/assets/autel-maxicharger-ac.jpg"
+        "/ha_ocpp_static/assets/autel-maxicharger-ac.png"
     )
     assert wallbox["supported_rate_units"] == ["Current", "Power"]
     assert [connector["id"] for connector in wallbox["connectors"]] == [1, 2]
+    assert [connector["actions"] for connector in wallbox["connectors"]] == [
+        ["stop"],
+        ["stop"],
+    ]
     assert RAW_TOKEN not in json.dumps(snapshot)

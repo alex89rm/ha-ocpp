@@ -196,6 +196,14 @@ class CentralSystem:
         self._server = server
         return self
 
+    @property
+    def is_serving(self) -> bool:
+        """Return whether the websocket listener is accepting connections."""
+        if self._server is None:
+            return False
+        is_serving = getattr(self._server, "is_serving", None)
+        return is_serving is None or is_serving()
+
     @staticmethod
     def _norm_conn(connector_id: int | None) -> int:
         if connector_id is None:

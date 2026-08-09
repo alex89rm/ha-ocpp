@@ -60,31 +60,65 @@ from .const import (
     OCPP_VERSIONS,
 )
 
-STEP_USER_CS_DATA_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_HOST, default=DEFAULT_HOST): str,
-        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-        vol.Required(CONF_SSL, default=DEFAULT_SSL): bool,
-        vol.Required(CONF_SSL_CERTFILE_PATH, default=DEFAULT_SSL_CERTFILE_PATH): str,
-        vol.Required(CONF_SSL_KEYFILE_PATH, default=DEFAULT_SSL_KEYFILE_PATH): str,
-        vol.Required(CONF_CSID, default=DEFAULT_CSID): vol.All(str, vol.Length(max=20)),
-        vol.Required(CONF_OCPP_VERSION, default=DEFAULT_OCPP_VERSION): vol.In(
-            OCPP_VERSIONS
-        ),
+
+def _central_system_schema(
+    current: dict[str, Any] | None = None, *, include_csid: bool
+) -> vol.Schema:
+    """Build a central-system form with defaults from the current entry."""
+    values = current or {}
+    fields = {
+        vol.Required(CONF_HOST, default=values.get(CONF_HOST, DEFAULT_HOST)): str,
+        vol.Required(CONF_PORT, default=values.get(CONF_PORT, DEFAULT_PORT)): int,
+        vol.Required(CONF_SSL, default=values.get(CONF_SSL, DEFAULT_SSL)): bool,
         vol.Required(
-            CONF_WEBSOCKET_CLOSE_TIMEOUT, default=DEFAULT_WEBSOCKET_CLOSE_TIMEOUT
-        ): int,
+            CONF_SSL_CERTFILE_PATH,
+            default=values.get(CONF_SSL_CERTFILE_PATH, DEFAULT_SSL_CERTFILE_PATH),
+        ): str,
         vol.Required(
-            CONF_WEBSOCKET_PING_TRIES, default=DEFAULT_WEBSOCKET_PING_TRIES
-        ): int,
-        vol.Required(
-            CONF_WEBSOCKET_PING_INTERVAL, default=DEFAULT_WEBSOCKET_PING_INTERVAL
-        ): int,
-        vol.Required(
-            CONF_WEBSOCKET_PING_TIMEOUT, default=DEFAULT_WEBSOCKET_PING_TIMEOUT
-        ): int,
+            CONF_SSL_KEYFILE_PATH,
+            default=values.get(CONF_SSL_KEYFILE_PATH, DEFAULT_SSL_KEYFILE_PATH),
+        ): str,
     }
-)
+    if include_csid:
+        fields[vol.Required(CONF_CSID, default=values.get(CONF_CSID, DEFAULT_CSID))] = (
+            vol.All(str, vol.Length(max=20))
+        )
+    fields.update(
+        {
+            vol.Required(
+                CONF_OCPP_VERSION,
+                default=values.get(CONF_OCPP_VERSION, DEFAULT_OCPP_VERSION),
+            ): vol.In(OCPP_VERSIONS),
+            vol.Required(
+                CONF_WEBSOCKET_CLOSE_TIMEOUT,
+                default=values.get(
+                    CONF_WEBSOCKET_CLOSE_TIMEOUT, DEFAULT_WEBSOCKET_CLOSE_TIMEOUT
+                ),
+            ): int,
+            vol.Required(
+                CONF_WEBSOCKET_PING_TRIES,
+                default=values.get(
+                    CONF_WEBSOCKET_PING_TRIES, DEFAULT_WEBSOCKET_PING_TRIES
+                ),
+            ): int,
+            vol.Required(
+                CONF_WEBSOCKET_PING_INTERVAL,
+                default=values.get(
+                    CONF_WEBSOCKET_PING_INTERVAL, DEFAULT_WEBSOCKET_PING_INTERVAL
+                ),
+            ): int,
+            vol.Required(
+                CONF_WEBSOCKET_PING_TIMEOUT,
+                default=values.get(
+                    CONF_WEBSOCKET_PING_TIMEOUT, DEFAULT_WEBSOCKET_PING_TIMEOUT
+                ),
+            ): int,
+        }
+    )
+    return vol.Schema(fields)
+
+
+STEP_USER_CS_DATA_SCHEMA = _central_system_schema(include_csid=True)
 
 STEP_USER_CP_DATA_SCHEMA = vol.Schema(
     {
@@ -111,6 +145,9 @@ STEP_USER_MEASURANDS_SCHEMA = vol.Schema(
         for m in MEASURANDS
     }
 )
+
+OPTIONS_TARGET = "target"
+OPTIONS_TARGET_CENTRAL_SYSTEM = "__central_system__"
 
 
 class ConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -325,7 +362,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class OCPPOptionsFlow(OptionsFlow):
-    """Edit the settings of an already-configured charge point.
+    """Edit an already-configured central system or charge point.
 
     The initial charger form (async_step_cp_user) is reachable only from
     integration discovery, which aborts for a charger that is already
@@ -346,6 +383,21 @@ class OCPPOptionsFlow(OptionsFlow):
             for cp_id, settings in item.items():
                 points[cp_id] = settings
         return points
+
+    def _server_schema(self) -> vol.Schema:
+        """Build the editable central-system schema from stored values."""
+        return _central_system_schema(
+            self.config_entry.data,
+            include_csid=False,
+        )
+
+    def _port_in_use(self, port: int) -> bool:
+        """Return whether another OCPP entry already listens on this port."""
+        return any(
+            entry.entry_id != self.config_entry.entry_id
+            and entry.data.get(CONF_PORT) == port
+            for entry in self.hass.config_entries.async_entries(DOMAIN)
+        )
 
     def _finalize(self) -> ConfigFlowResult:
         """Overlay the edited fields onto the charge point and write it back.
@@ -380,22 +432,54 @@ class OCPPOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Pick which charge point to edit, when there is a choice."""
+        """Pick the central system or charge point to edit."""
         points = self._charge_points()
-        if not points:
-            return self.async_abort(reason="no_charge_points")
 
         if user_input is not None:
-            self._cp_id = user_input["cp_id"]
+            target = user_input[OPTIONS_TARGET]
+            if target == OPTIONS_TARGET_CENTRAL_SYSTEM:
+                return await self.async_step_server_settings()
+            self._cp_id = target
             return await self.async_step_cp_settings()
 
-        if len(points) == 1:
-            self._cp_id = next(iter(points))
-            return await self.async_step_cp_settings()
+        targets = {
+            OPTIONS_TARGET_CENTRAL_SYSTEM: (
+                f"Central system ({self.config_entry.data[CONF_CSID]})"
+            ),
+            **{
+                cp_id: f"Charger {settings[CONF_CPID]} ({cp_id})"
+                for cp_id, settings in sorted(points.items())
+            },
+        }
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema({vol.Required("cp_id"): vol.In(sorted(points))}),
+            data_schema=vol.Schema({vol.Required(OPTIONS_TARGET): vol.In(targets)}),
+        )
+
+    async def async_step_server_settings(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit the listener settings of the central system."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            if self._port_in_use(user_input[CONF_PORT]):
+                errors[CONF_PORT] = "port_in_use"
+            else:
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry,
+                    data={**self.config_entry.data, **user_input},
+                )
+                return self.async_create_entry(data={})
+
+        return self.async_show_form(
+            step_id="server_settings",
+            data_schema=self._server_schema(),
+            errors=errors,
+            description_placeholders={
+                "csid": self.config_entry.data.get(CONF_CSID, DEFAULT_CSID)
+            },
         )
 
     async def async_step_cp_settings(

@@ -118,10 +118,29 @@
     "options": {
         "step": {
             "init": {
-                "title": "OCPP Charger Configuration",
-                "description": "Select the charge point to edit.",
+                "title": "OCPP Configuration",
+                "description": "Select the central system or charge point to edit.",
                 "data": {
-                    "cp_id": "Charge point"
+                    "target": "Configuration target"
+                }
+            },
+            "server_settings": {
+                "title": "OCPP Central System Configuration",
+                "description": "Editing central system {csid}. Saving restarts the OCPP listener and briefly disconnects its chargers. Its identity is fixed because device identifiers derive from it.",
+                "data": {
+                    "host": "Central system host address",
+                    "port": "Central system port number",
+                    "ssl": "Secure connection",
+                    "ssl_certfile_path": "Path to SSL certificate or (None)",
+                    "ssl_keyfile_path": "Path to SSL key or (None)",
+                    "ocpp_version": "OCPP version",
+                    "websocket_close_timeout": "Websocket close timeout (seconds)",
+                    "websocket_ping_tries": "Websocket successive times to try connection before closing",
+                    "websocket_ping_interval": "Websocket ping interval (seconds)",
+                    "websocket_ping_timeout": "Websocket ping timeout (seconds)"
+                },
+                "data_description": {
+                    "ocpp_version": "Auto negotiates with the charger using the integration's default order (OCPP 1.6 first). Choose a specific version to restrict negotiation to it."
                 }
             },
             "cp_settings": {
@@ -166,7 +185,8 @@
             }
         },
         "error": {
-            "no_measurands_selected": "No measurand selected: please select at least one"
+            "no_measurands_selected": "No measurand selected: please select at least one",
+            "port_in_use": "This port is already used by another OCPP central system."
         },
         "abort": {
             "no_charge_points": "No charge point has connected to this central system yet, so there is nothing to configure."

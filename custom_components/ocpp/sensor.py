@@ -41,10 +41,77 @@ class OcppSensorDescription(SensorEntityDescription):
     metric: str | None = None
 
 
+class CentralSystemStatus(SensorEntity):
+    """Diagnostic state and configuration summary for the OCPP listener."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:server-network"
+    _attr_name = "Server status"
+    _attr_should_poll = False
+
+    def __init__(self, central_system: CentralSystem) -> None:
+        """Initialize the central-system status sensor."""
+        self.central_system = central_system
+        self._attr_unique_id = (
+            f"{DOMAIN}.{central_system.entry.entry_id}.server_status.sensor"
+        )
+        self.entity_id = f"{SENSOR_DOMAIN}.{slugify(central_system.id)}_server_status"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, central_system.id)},
+            name=f"OCPP Central System ({central_system.id})",
+            model="OCPP Central System",
+        )
+
+    @property
+    def native_value(self) -> str:
+        """Return whether the websocket listener is running."""
+        return "running" if self.central_system.is_serving else "stopped"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        """Expose the listener settings and charger summary."""
+        configured_charge_points = {
+            cp_id: cp_settings[CONF_CPID]
+            for item in self.central_system.entry.data.get(CONF_CPIDS, [])
+            for cp_id, cp_settings in item.items()
+        }
+        available_charge_points = {
+            cp_id: cpid
+            for cpid, cp_id in self.central_system.cpids.items()
+            if self.central_system.get_available(cpid)
+        }
+        settings = self.central_system.settings
+        return {
+            "listen_address": settings.host,
+            "listen_port": settings.port,
+            "secure": settings.ssl,
+            "websocket_scheme": "wss" if settings.ssl else "ws",
+            "charge_point_path": "/{charge_point_id}",
+            "ocpp_version": settings.ocpp_version,
+            "accepted_subprotocols": list(self.central_system.subprotocols),
+            "configured_charge_points": configured_charge_points,
+            "available_charge_points": available_charge_points,
+            "websocket_ping_interval": settings.websocket_ping_interval,
+            "websocket_ping_timeout": settings.websocket_ping_timeout,
+            "websocket_ping_tries": settings.websocket_ping_tries,
+        }
+
+    async def async_added_to_hass(self) -> None:
+        """Refresh the summary when a charge point updates."""
+        await super().async_added_to_hass()
+
+        @callback
+        def _update(*_args) -> None:
+            self.async_write_ha_state()
+
+        self.async_on_remove(async_dispatcher_connect(self.hass, DATA_UPDATED, _update))
+
+
 async def async_setup_entry(hass, entry, async_add_devices):
     """Configure the sensor platform."""
     central_system = hass.data[DOMAIN][entry.entry_id]
-    entities: list[ChargePointMetric] = []
+    entities: list[SensorEntity] = [CentralSystemStatus(central_system)]
     ent_reg = er.async_get(hass)
 
     # setup all chargers added to config

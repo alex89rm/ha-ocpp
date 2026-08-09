@@ -26,11 +26,11 @@ from .test_charge_point_v16 import wait_ready, ChargePoint
 @pytest.mark.timeout(10)
 @pytest.mark.parametrize(
     "setup_config_entry",
-    [{"port": 9116, "cp_id": "CP_trig_timeout_nonzero_adjusts", "cms": "cms_trig_tnz"}],
+    [{"port": 9316, "cp_id": "CP_trig_timeout_nonzero_adjusts", "cms": "cms_trig_tnz"}],
     indirect=True,
 )
 @pytest.mark.parametrize("cp_id", ["CP_trig_timeout_nonzero_adjusts"])
-@pytest.mark.parametrize("port", [9116])
+@pytest.mark.parametrize("port", [9316])
 async def test_trigger_status_timeout_on_nonzero_adjusts_and_stops(
     hass, socket_enabled, cp_id, port, setup_config_entry, monkeypatch
 ):

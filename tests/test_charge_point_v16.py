@@ -20,6 +20,7 @@ from custom_components.ocpp.const import (
     DOMAIN as OCPP_DOMAIN,
     CONF_CPIDS,
     CONF_CPID,
+    CONF_MONITORED_VARIABLES,
     CONF_NUM_CONNECTORS,
 )
 from custom_components.ocpp.enums import (
@@ -593,7 +594,14 @@ async def test_cms_responses_actions_v16(
 @pytest.mark.timeout(20)  # Set timeout for this test
 @pytest.mark.parametrize(
     "setup_config_entry",
-    [{"port": 9006, "cp_id": "CP_1_error", "cms": "cms_error"}],
+    [
+        {
+            "port": 9006,
+            "cp_id": "CP_1_error",
+            "cms": "cms_error",
+            "cp_config": {CONF_MONITORED_VARIABLES: ""},
+        }
+    ],
     indirect=True,
 )
 @pytest.mark.parametrize("cp_id", ["CP_1_error"])
@@ -675,7 +683,14 @@ async def test_cms_responses_errors_v16(
 @pytest.mark.timeout(40)  # Set timeout for this test
 @pytest.mark.parametrize(
     "setup_config_entry",
-    [{"port": 9007, "cp_id": "CP_1_norm_mc", "cms": "cms_norm"}],
+    [
+        {
+            "port": 9007,
+            "cp_id": "CP_1_norm_mc",
+            "cms": "cms_norm",
+            "cp_config": {CONF_NUM_CONNECTORS: 2},
+        }
+    ],
     indirect=True,
 )
 @pytest.mark.parametrize("cp_id", ["CP_1_norm_mc"])
@@ -1291,7 +1306,14 @@ async def test_update_firmware_rpc_failure_v16(
 @pytest.mark.timeout(40)
 @pytest.mark.parametrize(
     "setup_config_entry",
-    [{"port": 9020, "cp_id": "CP_1_unit_fallback", "cms": "cms_unit_fallback"}],
+    [
+        {
+            "port": 9020,
+            "cp_id": "CP_1_unit_fallback",
+            "cms": "cms_unit_fallback",
+            "cp_config": {CONF_NUM_CONNECTORS: 3},
+        }
+    ],
     indirect=True,
 )
 @pytest.mark.parametrize("cp_id", ["CP_1_unit_fallback"])
@@ -1350,6 +1372,7 @@ async def test_api_get_unit_fallback_to_later_connectors(
             "port": 9019,
             "cp_id": "CP_1_extra_fallback",
             "cms": "cms_extra_fallback",
+            "cp_config": {CONF_NUM_CONNECTORS: 3},
         }
     ],
     indirect=True,
@@ -1761,7 +1784,7 @@ async def test_session_metrics_single_connector_backward_compat(
             "port": 9027,
             "cp_id": "CP_1_sess_multi",
             "cms": "cms_sess_multi",
-            "num_connectors": 2,
+            "cp_config": {CONF_NUM_CONNECTORS: 2},
         }
     ],
     indirect=True,
@@ -3140,7 +3163,14 @@ async def test_post_connect_fetch_supported_features_raises(
 @pytest.mark.timeout(10)
 @pytest.mark.parametrize(
     "setup_config_entry",
-    [{"port": 9121, "cp_id": "CP_postconn_ex_2", "cms": "cms_postconn_ex_2"}],
+    [
+        {
+            "port": 9121,
+            "cp_id": "CP_postconn_ex_2",
+            "cms": "cms_postconn_ex_2",
+            "cp_config": {CONF_MONITORED_VARIABLES: "Voltage"},
+        }
+    ],
     indirect=True,
 )
 @pytest.mark.parametrize("cp_id", ["CP_postconn_ex_2"])
@@ -3220,6 +3250,8 @@ async def test_post_connect_set_availability_error_swallowed_and_REM_triggers_ca
             assert called["status"] == 1
         finally:
             task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
 
 # ---------------------------------------------------------------------------
@@ -3228,7 +3260,14 @@ async def test_post_connect_set_availability_error_swallowed_and_REM_triggers_ca
 @pytest.mark.timeout(10)
 @pytest.mark.parametrize(
     "setup_config_entry",
-    [{"port": 9122, "cp_id": "CP_postconn_ex_3", "cms": "cms_postconn_ex_3"}],
+    [
+        {
+            "port": 9122,
+            "cp_id": "CP_postconn_ex_3",
+            "cms": "cms_postconn_ex_3",
+            "cp_config": {CONF_MONITORED_VARIABLES: "Voltage"},
+        }
+    ],
     indirect=True,
 )
 @pytest.mark.parametrize("cp_id", ["CP_postconn_ex_3"])
@@ -3288,6 +3327,8 @@ async def test_post_connect_set_availability_cancelled_bubbles(
                 await srv_cp.post_connect()
         finally:
             task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
 
 # ---------------------------------------------------------------------------
@@ -3296,7 +3337,14 @@ async def test_post_connect_set_availability_cancelled_bubbles(
 @pytest.mark.timeout(10)
 @pytest.mark.parametrize(
     "setup_config_entry",
-    [{"port": 9123, "cp_id": "CP_postconn_ex_4", "cms": "cms_postconn_ex_4"}],
+    [
+        {
+            "port": 9123,
+            "cp_id": "CP_postconn_ex_4",
+            "cms": "cms_postconn_ex_4",
+            "cp_config": {CONF_MONITORED_VARIABLES: "Voltage"},
+        }
+    ],
     indirect=True,
 )
 @pytest.mark.parametrize("cp_id", ["CP_postconn_ex_4"])
@@ -3362,6 +3410,8 @@ async def test_post_connect_trigger_boot_notification_raises_outer_caught(
             assert getattr(srv_cp, "post_connect_success", False) is True
         finally:
             task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
 
 # ---------------------------------------------------------------------------
@@ -3370,7 +3420,14 @@ async def test_post_connect_trigger_boot_notification_raises_outer_caught(
 @pytest.mark.timeout(10)
 @pytest.mark.parametrize(
     "setup_config_entry",
-    [{"port": 9124, "cp_id": "CP_postconn_ex_5", "cms": "cms_postconn_ex_5"}],
+    [
+        {
+            "port": 9124,
+            "cp_id": "CP_postconn_ex_5",
+            "cms": "cms_postconn_ex_5",
+            "cp_config": {CONF_MONITORED_VARIABLES: "Voltage"},
+        }
+    ],
     indirect=True,
 )
 @pytest.mark.parametrize("cp_id", ["CP_postconn_ex_5"])
@@ -3441,6 +3498,8 @@ async def test_post_connect_trigger_status_notification_raises_outer_caught(
             assert getattr(srv_cp, "post_connect_success", False) is True
         finally:
             task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
 
 # ---------------------------------------------------------------------------
@@ -3507,6 +3566,8 @@ async def test_post_connect_update_entry_raises_outer_caught(
             assert getattr(srv_cp, "post_connect_success", False) is not True
         finally:
             task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
 
 # ---------------------------------------------------------------------------
@@ -3515,7 +3576,14 @@ async def test_post_connect_update_entry_raises_outer_caught(
 @pytest.mark.timeout(10)
 @pytest.mark.parametrize(
     "setup_config_entry",
-    [{"port": 9126, "cp_id": "CP_postconn_ex_7", "cms": "cms_postconn_ex_7"}],
+    [
+        {
+            "port": 9126,
+            "cp_id": "CP_postconn_ex_7",
+            "cms": "cms_postconn_ex_7",
+            "cp_config": {CONF_MONITORED_VARIABLES: "Voltage"},
+        }
+    ],
     indirect=True,
 )
 @pytest.mark.parametrize("cp_id", ["CP_postconn_ex_7"])
@@ -3567,6 +3635,8 @@ async def test_post_connect_set_standard_configuration_raises_outer_caught(
             assert getattr(srv_cp, "post_connect_success", False) is not True
         finally:
             task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
 
 # ---------------------------------------------------------------------------
@@ -3575,7 +3645,14 @@ async def test_post_connect_set_standard_configuration_raises_outer_caught(
 @pytest.mark.timeout(10)
 @pytest.mark.parametrize(
     "setup_config_entry",
-    [{"port": 9127, "cp_id": "CP_postconn_ex_8", "cms": "cms_postconn_ex_8"}],
+    [
+        {
+            "port": 9127,
+            "cp_id": "CP_postconn_ex_8",
+            "cms": "cms_postconn_ex_8",
+            "cp_config": {CONF_MONITORED_VARIABLES: "Voltage"},
+        }
+    ],
     indirect=True,
 )
 @pytest.mark.parametrize("cp_id", ["CP_postconn_ex_8"])
@@ -3615,6 +3692,8 @@ async def test_post_connect_number_of_connectors_raises_outer_caught(
             assert getattr(srv_cp, "post_connect_success", False) is not True
         finally:
             task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
 
 @pytest.mark.timeout(10)

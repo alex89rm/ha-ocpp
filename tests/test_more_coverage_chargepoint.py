@@ -271,6 +271,7 @@ async def test_update_returns_early_when_root_device_missing(
 
             # Should exit early without error (L602).
             await srv.update(srv.settings.cpid)
+            monkeypatch.undo()
         finally:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -369,6 +370,7 @@ async def test_update_traverses_children_and_skips_visited(
             # No exceptions expected; internal traversal will append 'child' twice,
             # so on second pop it will be in 'visited' and trigger L612 'continue'.
             await srv.update(srv.settings.cpid)
+            monkeypatch.undo()
         finally:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

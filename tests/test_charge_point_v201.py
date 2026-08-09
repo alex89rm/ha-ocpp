@@ -28,6 +28,7 @@ from .charge_point_test import (
 )
 from .const import MOCK_CONFIG_DATA, MOCK_CONFIG_DATA_3, MOCK_CONFIG_CP_APPEND
 from custom_components.ocpp.const import (
+    CONF_MONITORED_VARIABLES,
     DEFAULT_METER_INTERVAL,
     DOMAIN as OCPP_DOMAIN,
     CONF_PORT,
@@ -1464,7 +1465,11 @@ async def test_cms_responses_v201(hass, socket_enabled):
     # config_data[CONF_MONITORED_VARIABLES] = ",".join(supported_measurands)
     cp_id = "CP_2"
     config_data = MOCK_CONFIG_DATA.copy()
-    config_data[CONF_CPIDS].append({cp_id: MOCK_CONFIG_CP_APPEND.copy()})
+    cp_config = {
+        **MOCK_CONFIG_CP_APPEND,
+        CONF_MONITORED_VARIABLES: ",".join(supported_measurands),
+    }
+    config_data[CONF_CPIDS].append({cp_id: cp_config})
     config_data[CONF_CPIDS][-1][cp_id][CONF_CPID] = "test_v201_cpid"
 
     config_data[CONF_PORT] = 9080
@@ -1491,7 +1496,11 @@ async def test_cms_responses_v201(hass, socket_enabled):
     # add v2.1 charger to config entry
     entry = hass.config_entries._entries.get_entries_for_domain(OCPP_DOMAIN)[0]
     cp_id3 = "CP_2_1_allfeatures"
-    entry.data[CONF_CPIDS].append({cp_id3: MOCK_CONFIG_CP_APPEND.copy()})
+    cp_id3_config = {
+        **MOCK_CONFIG_CP_APPEND,
+        CONF_MONITORED_VARIABLES: ",".join(supported_measurands),
+    }
+    entry.data[CONF_CPIDS].append({cp_id3: cp_id3_config})
     entry.data[CONF_CPIDS][-1][cp_id3][CONF_CPID] = "test_v21_cpid3"
     # need to reload to setup sensors etc for new charger
     await hass.config_entries.async_reload(entry.entry_id)
@@ -1534,8 +1543,12 @@ async def test_cms_responses_v201(hass, socket_enabled):
 
     cp_id2 = "CP_2_report_fail"
     entry = hass.config_entries._entries.get_entries_for_domain(OCPP_DOMAIN)[0]
-    entry.data[CONF_CPIDS].append({cp_id2: MOCK_CONFIG_CP_APPEND.copy()})
-    entry.data[CONF_CPIDS][-1][cp_id2][CONF_CPID] = "test_v201_cpid2"
+    cp_id2_config = {
+        **MOCK_CONFIG_CP_APPEND,
+        CONF_CPID: "test_v201_cpid2",
+        CONF_MONITORED_VARIABLES: "",
+    }
+    entry.data[CONF_CPIDS].append({cp_id2: cp_id2_config})
     # need to reload to setup sensors etc for new charger
     await hass.config_entries.async_reload(entry.entry_id)
     cs = hass.data[DOMAIN][entry.entry_id]

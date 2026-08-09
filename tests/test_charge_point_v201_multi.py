@@ -6,7 +6,12 @@ from datetime import datetime, UTC
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ocpp.const import CONF_CPIDS, CONF_CPID
+from custom_components.ocpp.const import (
+    CONF_CPID,
+    CONF_CPIDS,
+    CONF_MONITORED_VARIABLES,
+    CONF_NUM_CONNECTORS,
+)
 from custom_components.ocpp.const import (
     DOMAIN as OCPP_DOMAIN,
 )
@@ -288,7 +293,14 @@ async def test_v201_multi_connectors_per_evse(hass, socket_enabled):
     cp_id = "CP_v201_multi"
 
     config_data = MOCK_CONFIG_DATA.copy()
-    config_data[CONF_CPIDS].append({cp_id: MOCK_CONFIG_CP_APPEND.copy()})
+    cp_config = {
+        **MOCK_CONFIG_CP_APPEND,
+        CONF_MONITORED_VARIABLES: (
+            "Energy.Active.Import.Register,Current.Import,Voltage"
+        ),
+        CONF_NUM_CONNECTORS: 3,
+    }
+    config_data[CONF_CPIDS].append({cp_id: cp_config})
     config_data[CONF_CPIDS][-1][cp_id][CONF_CPID] = "test_v201_cpid"
 
     config_entry = MockConfigEntry(

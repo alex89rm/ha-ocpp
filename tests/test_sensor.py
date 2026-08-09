@@ -76,7 +76,7 @@ async def test_sensor(hass, socket_enabled):
     cp_data = MOCK_CONFIG_CP_APPEND.copy()
     cp_data[CONF_CPID] = cpid
     data[CONF_CPIDS].append({cp_id: cp_data})
-    data[CONF_PORT] = 9015
+    data[CONF_PORT] = 9515
     config_entry = MockConfigEntry(
         domain=OCPP_DOMAIN,
         data=data,

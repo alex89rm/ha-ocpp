@@ -90,6 +90,7 @@ jobs:
             --timeout=30 \
             --durations=10 \
             -n auto \
+            --dist=loadfile \
             -p no:sugar \
             -rA \
             tests

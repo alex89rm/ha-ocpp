@@ -66,6 +66,7 @@ from .const import (
     DEFAULT_CHARGING_RATE_UNITS,
     DEFAULT_POWER_UNIT,
     DEFAULT_MEASURAND,
+    DEFAULT_WALLBOX_PROFILE,
     DOMAIN,
     HA_ENERGY_UNIT,
     HA_POWER_UNIT,
@@ -286,7 +287,8 @@ class ChargePoint(cp):
         self._charger_reports_session_energy = False
         self.wallbox_identity = WallboxIdentity()
         self.wallbox_profile = select_profile(
-            self.wallbox_identity, self.settings.wallbox_profile
+            self.wallbox_identity,
+            getattr(self.settings, "wallbox_profile", DEFAULT_WALLBOX_PROFILE),
         )
 
         # Connector-aware, but backwards compatible:
@@ -656,7 +658,8 @@ class ChargePoint(cp):
             firmware_version=str(firmware_version or ""),
         )
         self.wallbox_profile = select_profile(
-            self.wallbox_identity, self.settings.wallbox_profile
+            self.wallbox_identity,
+            getattr(self.settings, "wallbox_profile", DEFAULT_WALLBOX_PROFILE),
         )
         _LOGGER.info(
             "Selected wallbox profile %s for %s (%s %s)",
@@ -768,6 +771,11 @@ class ChargePoint(cp):
         - Power.Factor: **average** of L1/L2/L3 (ignore N). *Do not sum; unit is dimensionless and may be missing.*
         - Other (e.g. Power.Active.*): sum of L1/L2/L3 (ignore N).
         """
+        wallbox_profile = getattr(
+            self,
+            "wallbox_profile",
+            select_profile(WallboxIdentity()),
+        )
         # For single-connector chargers, use connector 1.
         n_connectors = getattr(self, CONF_NUM_CONNECTORS, DEFAULT_NUM_CONNECTORS) or 1
         if connector_id in (None, 0):
@@ -785,9 +793,7 @@ class ChargePoint(cp):
 
         def average_valid_voltages(values: list[float]) -> float:
             """Average phase voltages above the active profile's noise floor."""
-            valid = [
-                v for v in values if abs(v) >= self.wallbox_profile.voltage_noise_floor
-            ]
+            valid = [v for v in values if abs(v) >= wallbox_profile.voltage_noise_floor]
             return (sum(valid) / len(valid)) if valid else 0.0
 
         measurand_data: dict[str, dict[str, float]] = {}
@@ -796,7 +802,7 @@ class ChargePoint(cp):
             # create ordered Dict for each measurand, eg {"voltage":{"unit":"V","L1-N":"230"...}}
             measurand = item.measurand
             phase = item.phase
-            value = self.wallbox_profile.normalize_measurand_value(
+            value = wallbox_profile.normalize_measurand_value(
                 measurand, item.value, phase
             )
             unit = item.unit

@@ -363,9 +363,7 @@ WALLBOX_COMMAND_SCHEMA = {
     vol.Optional("unit"): vol.In(
         [CHARGING_RATE_UNIT_CURRENT, CHARGING_RATE_UNIT_POWER]
     ),
-    vol.Optional("connector_id", default=0): vol.All(
-        vol.Coerce(int), vol.Range(min=0)
-    ),
+    vol.Optional("connector_id", default=0): vol.All(vol.Coerce(int), vol.Range(min=0)),
     vol.Optional("enabled", default=True): bool,
 }
 

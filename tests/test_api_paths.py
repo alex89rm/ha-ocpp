@@ -628,9 +628,9 @@ async def test_on_connect_cancels_tasks_when_stop_fails(hass, monkeypatch):
     # must not raise, and must still replace the charge point
     await cs.on_connect(_make_ws("ocpp2.0.1"))
 
-    assert all(task.cancelled for task in old_cp.tasks), (
-        "stale charge point's tasks must be cancelled when stop() fails"
-    )
+    assert all(
+        task.cancelled for task in old_cp.tasks
+    ), "stale charge point's tasks must be cancelled when stop() fails"
     assert cs.charge_points["CP_1"] is new_cp
     assert new_cp.started is True
 

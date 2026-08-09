@@ -78,7 +78,7 @@ async def setup_config_entry(hass, request) -> AsyncGenerator[CentralSystem, Non
     """Setup/teardown mock config entry and central system."""
     # Create a mock entry so we don't have to go through config flow
     # Both version and minor need to match config flow so as not to trigger migration flow
-    config_data = MOCK_CONFIG_DATA.copy()
+    config_data = {**MOCK_CONFIG_DATA, CONF_CPIDS: []}
     config_data[CONF_CPIDS].append(
         {request.param["cp_id"]: MOCK_CONFIG_CP_APPEND.copy()}
     )

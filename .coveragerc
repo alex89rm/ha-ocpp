@@ -1,6 +1,6 @@
 [run]
 branch = False
-source = custom_components/ocpp
+source = custom_components/ha_ocpp
 
 [report]
 exclude_lines =

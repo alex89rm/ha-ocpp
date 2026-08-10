@@ -15,13 +15,13 @@ from ocpp.exceptions import OCPPError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from websockets.protocol import State
 
-from custom_components.ocpp.const import (
+from custom_components.ha_ocpp.const import (
     DOMAIN,
     CentralSystemSettings,
     ChargerSystemSettings,
 )
-from custom_components.ocpp.enums import HAChargerStatuses as cstat
-from custom_components.ocpp.ocppv201 import ChargePoint
+from custom_components.ha_ocpp.enums import HAChargerStatuses as cstat
+from custom_components.ha_ocpp.ocppv201 import ChargePoint
 
 from .const import CONF_SSL_CERTFILE_PATH, CONF_SSL_KEYFILE_PATH
 
@@ -123,7 +123,7 @@ async def test_second_post_connect_during_slow_inventory_does_not_poison_map(has
 
     # owner attempt in flight; first report part arrived, counts still absent
     cp._wait_inventory = asyncio.Event()
-    from custom_components.ocpp.ocppv201 import InventoryReport
+    from custom_components.ha_ocpp.ocppv201 import InventoryReport
 
     cp._inventory = InventoryReport()
     cp._pending_status_notifications = [

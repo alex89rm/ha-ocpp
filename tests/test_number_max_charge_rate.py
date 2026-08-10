@@ -6,7 +6,7 @@ from homeassistant.components.number import DOMAIN as NUMBER_DOMAIN
 from homeassistant.const import UnitOfElectricCurrent, UnitOfPower
 from homeassistant.helpers import entity_registry as er
 
-from custom_components.ocpp.const import (
+from custom_components.ha_ocpp.const import (
     CHARGING_RATE_UNIT_CURRENT,
     CHARGING_RATE_UNIT_POWER,
     CONF_CHARGING_RATE_UNITS,
@@ -24,8 +24,8 @@ from custom_components.ocpp.const import (
     DEFAULT_MONITORED_VARIABLES,
     DOMAIN,
 )
-from custom_components.ocpp.enums import Profiles
-from custom_components.ocpp.number import async_setup_entry
+from custom_components.ha_ocpp.enums import Profiles
+from custom_components.ha_ocpp.number import async_setup_entry
 
 
 class DummyCentralSystem:
@@ -139,11 +139,11 @@ async def test_number_entities_support_both_capabilities(hass):
         "maximum_power",
     ]
     assert {entity.unique_id for entity in entities} == {
-        "number.ocpp.test_cpid.conn1.maximum_current",
-        "number.ocpp.test_cpid.conn2.maximum_current",
-        "number.ocpp.test_cpid.conn3.maximum_current",
-        "number.ocpp.test_cpid.maximum_current",
-        "number.ocpp.test_cpid.maximum_power",
+        "number.ha_ocpp.test_cpid.conn1.maximum_current",
+        "number.ha_ocpp.test_cpid.conn2.maximum_current",
+        "number.ha_ocpp.test_cpid.conn3.maximum_current",
+        "number.ha_ocpp.test_cpid.maximum_current",
+        "number.ha_ocpp.test_cpid.maximum_power",
     }
     assert [entity.connector_id for entity in entities] == [1, 2, 3, None, None]
     assert [entity._station_wide for entity in entities] == [
@@ -179,8 +179,8 @@ async def test_connector_current_controls_are_preserved(hass, monkeypatch):
     connector_entities = [entity for entity in entities if entity.connector_id]
 
     assert [entity.unique_id for entity in connector_entities] == [
-        "number.ocpp.test_cpid.conn1.maximum_current",
-        "number.ocpp.test_cpid.conn2.maximum_current",
+        "number.ha_ocpp.test_cpid.conn1.maximum_current",
+        "number.ha_ocpp.test_cpid.conn2.maximum_current",
     ]
 
     entity = connector_entities[1]
@@ -194,8 +194,8 @@ async def test_connector_current_controls_are_preserved(hass, monkeypatch):
 async def test_number_setup_removes_only_stale_station_entity(hass):
     """Capability cleanup must not delete existing connector controls."""
     ent_reg = er.async_get(hass)
-    station_current_uid = "number.ocpp.test_cpid.maximum_current"
-    connector_current_uid = "number.ocpp.test_cpid.conn1.maximum_current"
+    station_current_uid = "number.ha_ocpp.test_cpid.maximum_current"
+    connector_current_uid = "number.ha_ocpp.test_cpid.conn1.maximum_current"
     for unique_id in [station_current_uid, connector_current_uid]:
         ent_reg.async_get_or_create(
             NUMBER_DOMAIN,

@@ -3,8 +3,8 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, call
 
-from custom_components.ocpp.chargepoint import SetVariableResult
-from custom_components.ocpp.ocppv16 import (
+from custom_components.ha_ocpp.chargepoint import SetVariableResult
+from custom_components.ha_ocpp.ocppv16 import (
     REGISTERED_ONLY_CONFIGURATION,
     ChargePoint,
 )

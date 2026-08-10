@@ -20,7 +20,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from homeassistant import data_entry_flow
 
-from custom_components.ocpp.config_flow import (
+from custom_components.ha_ocpp.config_flow import (
     AUTH_CHARGE_POINT,
     AUTH_ENABLED,
     AUTH_LABEL,
@@ -28,7 +28,7 @@ from custom_components.ocpp.config_flow import (
     OPTIONS_TARGET_AUTHORIZATION,
     OPTIONS_TARGET_CENTRAL_SYSTEM,
 )
-from custom_components.ocpp.const import (
+from custom_components.ha_ocpp.const import (
     CONF_AUTHORIZATION_REQUIRED,
     CONF_AUTH_STATUS,
     CONF_CPID,
@@ -66,8 +66,8 @@ from .const import MOCK_CONFIG_CS, MOCK_CONFIG_CP
 def bypass_setup_fixture():
     """Prevent actual setup of the integration."""
     with (
-        patch("custom_components.ocpp.async_setup", return_value=True),
-        patch("custom_components.ocpp.async_setup_entry", return_value=True),
+        patch("custom_components.ha_ocpp.async_setup", return_value=True),
+        patch("custom_components.ha_ocpp.async_setup_entry", return_value=True),
     ):
         yield
 

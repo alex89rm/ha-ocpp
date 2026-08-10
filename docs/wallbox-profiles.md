@@ -22,11 +22,11 @@ be required for basic OCPP operation.
 
 ## Adding A Product
 
-1. Add a declarative profile module under `custom_components/ocpp/wallbox_profiles/`.
+1. Add a declarative profile module under `custom_components/ha_ocpp/wallbox_profiles/`.
 2. Register it in `registry.py` with specific vendor and model patterns.
 3. Add matching and normalization tests.
 4. Set `hardware_verified=True` only after testing on physical hardware.
-5. Put an approved product image in `custom_components/ocpp/frontend/assets/`
+5. Put an approved product image in `custom_components/ha_ocpp/frontend/assets/`
    and reference it as `/ha_ocpp_static/assets/<file>`.
 
 Product artwork is presentation metadata. Missing artwork falls back to the

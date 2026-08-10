@@ -1,6 +1,6 @@
 """Tests for modular wallbox profile selection."""
 
-from custom_components.ocpp.wallbox_profiles import (
+from custom_components.ha_ocpp.wallbox_profiles import (
     GENERIC_PROFILE_ID,
     WallboxIdentity,
     get_profile,

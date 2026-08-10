@@ -13,12 +13,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from custom_components.ocpp.ocppv16 import ChargePoint as ChargePointv16
-from custom_components.ocpp.const import (
+from custom_components.ha_ocpp.ocppv16 import ChargePoint as ChargePointv16
+from custom_components.ha_ocpp.const import (
     CHARGING_RATE_UNIT_CURRENT,
     CHARGING_RATE_UNIT_POWER,
 )
-from custom_components.ocpp.enums import (
+from custom_components.ha_ocpp.enums import (
     Profiles as prof,
     ConfigurationKey as ckey,
     OcppMisc as om,

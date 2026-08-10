@@ -12,9 +12,9 @@ fi
 # Ensure custom components dir exists
 mkdir -p "${PWD}/config/custom_components"
 
-# Link the ocpp integration (overwrite if exists)
-src="${PWD}/custom_components/ocpp"
-dst="${PWD}/config/custom_components/ocpp"
+# Link the HA OCPP integration (overwrite if exists)
+src="${PWD}/custom_components/ha_ocpp"
+dst="${PWD}/config/custom_components/ha_ocpp"
 if [[ ! -d "$src" ]]; then
   echo "Missing integration sources at: $src" >&2
   exit 1

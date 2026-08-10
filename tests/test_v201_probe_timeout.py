@@ -21,14 +21,14 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from websockets.exceptions import ConnectionClosedError
 from websockets.protocol import State
 
-from custom_components.ocpp.const import (
+from custom_components.ha_ocpp.const import (
     DOMAIN,
     CentralSystemSettings,
     ChargerSystemSettings,
 )
-from custom_components.ocpp.enums import HAChargerDetails as cdet
-from custom_components.ocpp.enums import Profiles
-from custom_components.ocpp.ocppv201 import ChargePoint, InventoryReport
+from custom_components.ha_ocpp.enums import HAChargerDetails as cdet
+from custom_components.ha_ocpp.enums import Profiles
+from custom_components.ha_ocpp.ocppv201 import ChargePoint, InventoryReport
 
 from .const import CONF_SSL_CERTFILE_PATH, CONF_SSL_KEYFILE_PATH
 
@@ -190,7 +190,7 @@ async def test_a_stall_is_logged_louder_than_a_refusal(hass, caplog):
     """
     cp = _mk_cp(hass, stalls_on=["UpdateFirmware"])
 
-    with caplog.at_level("INFO", logger="custom_components.ocpp"):
+    with caplog.at_level("INFO", logger="custom_components.ha_ocpp"):
         await cp.get_supported_features()
 
     stalls = [r for r in caplog.records if r.levelname == "WARNING"]
@@ -202,7 +202,7 @@ async def test_a_stall_is_logged_louder_than_a_refusal(hass, caplog):
         hass, stalls_on=["UpdateFirmware"], raises=OCPPError("not supported")
     )
 
-    with caplog.at_level("INFO", logger="custom_components.ocpp"):
+    with caplog.at_level("INFO", logger="custom_components.ha_ocpp"):
         await refusing.get_supported_features()
 
     assert [r for r in caplog.records if r.levelname == "WARNING"] == []

@@ -2,7 +2,7 @@
 
 import pytest
 
-from custom_components.ocpp.chargepoint import _ConnectorAwareMetrics, Metric
+from custom_components.ha_ocpp.chargepoint import _ConnectorAwareMetrics, Metric
 
 
 def M(v=None, unit=None):

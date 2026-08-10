@@ -43,12 +43,12 @@ max: 10
 
 ### unstable behavior when setting the charger maximum current
 
-If your charger is acting strange when you're changing the maximum current, or sending an ocpp.set_charge_rate action, it might help to clear the charging profiles from the charger.
+If your charger is acting strange when you're changing the maximum current, or sending a ha_ocpp.set_charge_rate action, it might help to clear the charging profiles from the charger.
 
 Run the following action (from Developer Tools):
 
 ```
-    - action: ocpp.clear_profile
+    - action: ha_ocpp.clear_profile
       data:
         devid: charger
 ```

@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ocpp.chargepoint import ChargePoint, OcppVersion
-from custom_components.ocpp.const import (
+from custom_components.ha_ocpp.chargepoint import ChargePoint, OcppVersion
+from custom_components.ha_ocpp.const import (
     CHARGING_RATE_UNIT_CURRENT,
     CHARGING_RATE_UNIT_POWER,
     CONF_CHARGING_RATE_UNITS,

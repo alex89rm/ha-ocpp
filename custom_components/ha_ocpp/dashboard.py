@@ -96,13 +96,16 @@ def _available_connector_actions(status: Any, connected: bool) -> tuple[str, ...
     return ()
 
 
-def _central_systems(hass: HomeAssistant) -> list[CentralSystem]:
-    """Return every loaded HA OCPP central system."""
-    return [
-        value
-        for value in hass.data.get(DOMAIN, {}).values()
-        if isinstance(value, CentralSystem)
-    ]
+def _central_system(hass: HomeAssistant) -> CentralSystem | None:
+    """Return the single loaded HA OCPP server."""
+    return next(
+        (
+            value
+            for value in hass.data.get(DOMAIN, {}).values()
+            if isinstance(value, CentralSystem)
+        ),
+        None,
+    )
 
 
 def _central_by_entry(hass: HomeAssistant, entry_id: str) -> CentralSystem | None:
@@ -316,42 +319,34 @@ def _wallbox_snapshot(
 
 def dashboard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     """Return the complete HA OCPP management state."""
-    entries = []
-    for central in _central_systems(hass):
+    central = _central_system(hass)
+    entry = None
+    if central is not None:
         wallboxes = [
             _wallbox_snapshot(hass, central, cp_id, config)
             for item in central.entry.data.get(CONF_CPIDS, [])
             for cp_id, config in item.items()
         ]
-        entries.append(
-            {
-                "entry_id": central.entry.entry_id,
-                "name": central.entry.title,
-                "server": {
-                    "id": central.id,
-                    "running": central.is_serving,
-                    "host": central.settings.host,
-                    "port": central.settings.port,
-                    "ssl": central.settings.ssl,
-                    "connections": sum(
-                        1 for wallbox in wallboxes if wallbox["connected"]
-                    ),
-                    "websocket_ping_interval": (
-                        central.settings.websocket_ping_interval
-                    ),
-                    "websocket_ping_timeout": central.settings.websocket_ping_timeout,
-                    "websocket_ping_tries": central.settings.websocket_ping_tries,
-                    "websocket_close_timeout": (
-                        central.settings.websocket_close_timeout
-                    ),
-                },
-                "wallboxes": wallboxes,
-                "authorization": _authorization_snapshot(central),
-            }
-        )
+        entry = {
+            "entry_id": central.entry.entry_id,
+            "name": central.entry.title,
+            "server": {
+                "running": central.is_serving,
+                "host": central.settings.host,
+                "port": central.settings.port,
+                "ssl": central.settings.ssl,
+                "connections": sum(1 for wallbox in wallboxes if wallbox["connected"]),
+                "websocket_ping_interval": central.settings.websocket_ping_interval,
+                "websocket_ping_timeout": central.settings.websocket_ping_timeout,
+                "websocket_ping_tries": central.settings.websocket_ping_tries,
+                "websocket_close_timeout": central.settings.websocket_close_timeout,
+            },
+            "wallboxes": wallboxes,
+            "authorization": _authorization_snapshot(central),
+        }
     return {
         "product": "HA OCPP",
-        "entries": entries,
+        "entry": entry,
         "profiles": profile_catalog(),
     }
 

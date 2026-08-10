@@ -32,6 +32,8 @@ from .const import (
     DOMAIN,
     ICON,
     Measurand,
+    SERVER_DEVICE_MODEL,
+    SERVER_DEVICE_NAME,
 )
 from .enums import HAChargerDetails, HAChargerSession, HAChargerStatuses
 
@@ -61,8 +63,9 @@ class CentralSystemStatus(SensorEntity):
         self.entity_id = f"{SENSOR_DOMAIN}.{slugify(central_system.id)}_server_status"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, central_system.id)},
-            name=f"OCPP Central System ({central_system.id})",
-            model="OCPP Central System",
+            name=SERVER_DEVICE_NAME,
+            manufacturer="HA OCPP",
+            model=SERVER_DEVICE_MODEL,
         )
 
     @property

@@ -20,7 +20,7 @@ name is part of the Home Assistant domain and must not be changed.
 
 1. Open **Settings > Devices & services**.
 2. Select **Add integration**, search for **HA OCPP**, and open it.
-3. Configure the central-system listener.
+3. Configure the HA OCPP server listener. Only one server entry can be created.
 
 The default host `0.0.0.0` listens on every network interface of the Home
 Assistant host. The default OCPP WebSocket port is `9000`. Pin an OCPP version
@@ -28,8 +28,9 @@ only when a station negotiates the wrong version; **Auto** advertises all
 supported subprotocols in the server's configured order.
 
 After setup, the **HA OCPP** management panel appears in the Home Assistant
-sidebar. A central-system device is also created under the integration for
-diagnostic and user-status entities.
+sidebar. The **HA OCPP Server** device is also created under the integration
+for diagnostic and user-status entities; every wallbox is linked to it as a
+child device.
 
 ## TLS
 

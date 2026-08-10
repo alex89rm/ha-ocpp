@@ -54,6 +54,7 @@ from .const import (
     CONF_WEBSOCKET_PING_TIMEOUT,
     CONF_WEBSOCKET_PING_TRIES,
     CONF_WALLBOX_PROFILE,
+    CONFIG_ENTRY_TITLE,
     DEFAULT_CPID,
     DEFAULT_CSID,
     DEFAULT_CHARGING_RATE_UNITS,
@@ -148,7 +149,7 @@ def _central_system_schema(
     return vol.Schema(fields)
 
 
-STEP_USER_CS_DATA_SCHEMA = _central_system_schema(include_csid=True)
+STEP_USER_CS_DATA_SCHEMA = _central_system_schema(include_csid=False)
 
 STEP_USER_CP_DATA_SCHEMA = vol.Schema(
     {
@@ -200,7 +201,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for OCPP."""
 
     VERSION = 2
-    MINOR_VERSION = 3
+    MINOR_VERSION = 4
     CONNECTION_CLASS = CONN_CLASS_LOCAL_PUSH
 
     def __init__(self):
@@ -218,16 +219,17 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
         return OCPPOptionsFlow()
 
     async def async_step_user(self, user_input=None) -> ConfigFlowResult:
-        """Handle user central system initiated configuration."""
+        """Configure the single HA OCPP server."""
+        if self._async_current_entries():
+            return self.async_abort(reason="single_instance_allowed")
+
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            # Don't allow servers to use same websocket port
-            self._async_abort_entries_match({CONF_PORT: user_input[CONF_PORT]})
-            self._data = user_input
+            self._data = {**user_input, CONF_CSID: DEFAULT_CSID}
             # Add placeholder for cpid settings
             self._data[CONF_CPIDS] = []
-            return self.async_create_entry(title=self._data[CONF_CSID], data=self._data)
+            return self.async_create_entry(title=CONFIG_ENTRY_TITLE, data=self._data)
 
         return self.async_show_form(
             step_id="user",
@@ -239,18 +241,18 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_reconfigure(self, user_input=None) -> ConfigFlowResult:
-        """Allow reconfiguring the central system settings of an existing entry.
+        """Allow reconfiguring the server settings of the existing entry.
 
         Without this, settings added after an entry was created (such as the
         OCPP version pin) could only be changed by deleting and re-adding the
         integration.
         """
+        if user_input is not None and {"entry", "cp_id"} <= user_input.keys():
+            return await self.async_step_integration_discovery(user_input)
+
         entry = self._get_reconfigure_entry()
 
         if user_input is not None:
-            # Don't allow servers to use same websocket port (the entry being
-            # reconfigured is excluded from the match).
-            self._async_abort_entries_match({CONF_PORT: user_input[CONF_PORT]})
             # Updating the entry already triggers a reload, via the
             # add_update_listener(async_reload_entry) registered in
             # async_setup_entry. async_update_reload_and_abort() would schedule
@@ -266,7 +268,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=self.add_suggested_values_to_schema(
-                STEP_USER_CS_DATA_SCHEMA, entry.data
+                _central_system_schema(include_csid=False), entry.data
             ),
             description_placeholders={
                 "docs_url": "https://github.com/alex89rm/ha-ocpp"
@@ -292,20 +294,13 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
         return await self.async_step_cp_user()
 
     def _other_cpids_in_use(self) -> set[str]:
-        """Return every cpid already configured for a charge point other than the current one.
+        """Return every cpid configured for a charge point other than the current one.
 
         cpid (as opposed to cp_id, the OCPP-level charge point identity) is
         user-chosen and is what entities' unique_id is built from
         (DOMAIN.cpid.key...), so it must stay unique across every charge
-        point of every OCPP config entry, not just within the current
-        central system. Only the charge point currently being (re)configured
-        -- matched on both its entry and its cp_id -- is excluded, so
-        re-submitting its own cpid is not flagged as a duplicate of itself.
+        point. The charge point currently being reconfigured is excluded.
         """
-        # Match on the entry as well as the charge point: cp_id is the
-        # OCPP-level identity, so two central systems can each have one with
-        # the same name. Skipping on cp_id alone would also skip the *other*
-        # system's record and let a genuine duplicate through.
         own_entry_id = getattr(getattr(self, "_entry", None), "entry_id", None)
         cpids: set[str] = set()
         for entry in self.hass.config_entries.async_entries(DOMAIN):
@@ -332,9 +327,8 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             except vol.Invalid:
                 errors["base"] = "invalid_cpid"
             else:
-                # cpid is used to build entity unique_ids (DOMAIN.cpid.key...)
-                # across every OCPP config entry, so it must be unique
-                # integration-wide, not just within this central system.
+                # cpid is used to build entity unique_ids, so it must be unique
+                # across every wallbox on this server.
                 if user_input[CONF_CPID] in self._other_cpids_in_use():
                     errors["base"] = "duplicate_cpid"
 
@@ -415,7 +409,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class OCPPOptionsFlow(OptionsFlow):
-    """Edit an already-configured central system or charge point.
+    """Edit the configured server, authorization, or a charge point.
 
     The initial charger form (async_step_cp_user) is reachable only from
     integration discovery, which aborts for a charger that is already
@@ -468,14 +462,6 @@ class OCPPOptionsFlow(OptionsFlow):
             include_csid=False,
         )
 
-    def _port_in_use(self, port: int) -> bool:
-        """Return whether another OCPP entry already listens on this port."""
-        return any(
-            entry.entry_id != self.config_entry.entry_id
-            and entry.data.get(CONF_PORT) == port
-            for entry in self.hass.config_entries.async_entries(DOMAIN)
-        )
-
     def _finalize(self) -> ConfigFlowResult:
         """Overlay the edited fields onto the charge point and write it back.
 
@@ -522,9 +508,7 @@ class OCPPOptionsFlow(OptionsFlow):
             return await self.async_step_cp_settings()
 
         targets = {
-            OPTIONS_TARGET_CENTRAL_SYSTEM: (
-                f"Central system ({self.config_entry.data[CONF_CSID]})"
-            ),
+            OPTIONS_TARGET_CENTRAL_SYSTEM: "Server settings",
             OPTIONS_TARGET_AUTHORIZATION: "Authorization and RFID cards",
             **{
                 cp_id: f"Charger {settings[CONF_CPID]} ({cp_id})"
@@ -540,26 +524,20 @@ class OCPPOptionsFlow(OptionsFlow):
     async def async_step_server_settings(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Edit the listener settings of the central system."""
+        """Edit the OCPP listener settings."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            if self._port_in_use(user_input[CONF_PORT]):
-                errors[CONF_PORT] = "port_in_use"
-            else:
-                self.hass.config_entries.async_update_entry(
-                    self.config_entry,
-                    data={**self.config_entry.data, **user_input},
-                )
-                return self.async_create_entry(data={})
+            self.hass.config_entries.async_update_entry(
+                self.config_entry,
+                data={**self.config_entry.data, **user_input},
+            )
+            return self.async_create_entry(data={})
 
         return self.async_show_form(
             step_id="server_settings",
             data_schema=self._server_schema(),
             errors=errors,
-            description_placeholders={
-                "csid": self.config_entry.data.get(CONF_CSID, DEFAULT_CSID)
-            },
         )
 
     async def async_step_authorization(

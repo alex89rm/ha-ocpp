@@ -8,7 +8,10 @@ from homeassistant.data_entry_flow import InvalidData
 import pytest
 
 from custom_components.ha_ocpp.const import (
+    CONF_CSID,
     CONF_NUM_CONNECTORS,
+    CONFIG_ENTRY_TITLE,
+    DEFAULT_CSID,
     DEFAULT_NUM_CONNECTORS,
     DOMAIN,
 )
@@ -43,6 +46,18 @@ def bypass_setup_fixture():
         yield
 
 
+async def _start_charge_point_flow(hass, entry, cp_id):
+    """Start the wallbox flow linked to the single server entry."""
+    return await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={
+            "source": config_entries.SOURCE_RECONFIGURE,
+            "entry_id": entry.entry_id,
+        },
+        data={"cp_id": cp_id, "entry": entry},
+    )
+
+
 # Here we simiulate a successful config flow from the backend.
 # Note that we use the `bypass_get_data` fixture here because
 # we want the config flow validation to succeed during the test.
@@ -57,9 +72,10 @@ async def test_successful_config_flow(hass, bypass_get_data):
     assert result["type"] == data_entry_flow.FlowResultType.FORM
     assert result["step_id"] == "user"
 
-    # Remove cpids key as it gets added in flow
+    # Internal identifiers and charge points are managed by the integration.
     config = MOCK_CONFIG_CS.copy()
     config.pop(CONF_CPIDS)
+    config.pop(CONF_CSID)
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input=config
     )
@@ -67,8 +83,11 @@ async def test_successful_config_flow(hass, bypass_get_data):
     # Check that the config flow is complete and a new entry is created with
     # the input data
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
-    assert result["title"] == "test_csid_flow"
-    assert result["data"] == MOCK_CONFIG_CS
+    assert result["title"] == CONFIG_ENTRY_TITLE
+    assert result["data"] == {
+        **MOCK_CONFIG_CS,
+        CONF_CSID: DEFAULT_CSID,
+    }
     assert result["result"]
 
 
@@ -92,11 +111,7 @@ async def test_successful_discovery_flow(hass, bypass_get_data):
     entry = hass.config_entries._entries.get_entries_for_domain(DOMAIN)[0]
     info = {"cp_id": "test_cp_id", "entry": entry}
     # data here is discovery_info not user_input
-    result_disc = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_INTEGRATION_DISCOVERY},
-        data=info,
-    )
+    result_disc = await _start_charge_point_flow(hass, entry, "test_cp_id")
 
     # Check that the config flow shows the user form as the first step
     assert result_disc["type"] == data_entry_flow.FlowResultType.FORM
@@ -131,11 +146,7 @@ async def test_successful_discovery_flow(hass, bypass_get_data):
 
     # Test different CP IDs are allowed
     info2 = {"cp_id": "different_cp_id", "entry": entry}
-    result2_disc = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_INTEGRATION_DISCOVERY},
-        data=info2,
-    )
+    result2_disc = await _start_charge_point_flow(hass, entry, "different_cp_id")
     # Check that the config flow shows the user form as the first step
     assert result2_disc["type"] == data_entry_flow.FlowResultType.FORM
     assert result2_disc["step_id"] == "cp_user"
@@ -172,22 +183,13 @@ async def test_duplicate_cpid_discovery_flow(hass, bypass_get_data):
 
     # Try to add same CP ID twice
     entry = hass.config_entries._entries.get_entries_for_domain(DOMAIN)[0]
-    info = {"cp_id": "test_cp_id", "entry": entry}
 
     # First discovery should succeed
-    result1 = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_INTEGRATION_DISCOVERY},
-        data=info,
-    )
+    result1 = await _start_charge_point_flow(hass, entry, "test_cp_id")
     assert result1["type"] == data_entry_flow.FlowResultType.FORM
 
     # Second discovery with same CP ID should abort
-    result2 = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_INTEGRATION_DISCOVERY},
-        data=info,
-    )
+    result2 = await _start_charge_point_flow(hass, entry, "test_cp_id")
     assert result2["type"] == data_entry_flow.FlowResultType.ABORT
     assert result2["reason"] == "already_in_progress"
 
@@ -215,11 +217,7 @@ async def test_duplicate_cpid_value_rejected(hass, bypass_get_data):
     entry = hass.config_entries._entries.get_entries_for_domain(DOMAIN)[0]
 
     # First charge point (cp_id "cp_a") configures cpid "shared_cpid".
-    result1 = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_INTEGRATION_DISCOVERY},
-        data={"cp_id": "cp_a", "entry": entry},
-    )
+    result1 = await _start_charge_point_flow(hass, entry, "cp_a")
     cp1_input = MOCK_CONFIG_CP.copy()
     cp1_input[CONF_CPID] = "shared_cpid"
     result1 = await hass.config_entries.flow.async_configure(
@@ -229,11 +227,7 @@ async def test_duplicate_cpid_value_rejected(hass, bypass_get_data):
     assert len(entry.data[CONF_CPIDS]) == 1
 
     # Second, different charge point (cp_id "cp_b") tries to reuse "shared_cpid".
-    result2 = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_INTEGRATION_DISCOVERY},
-        data={"cp_id": "cp_b", "entry": entry},
-    )
+    result2 = await _start_charge_point_flow(hass, entry, "cp_b")
     cp2_input = MOCK_CONFIG_CP.copy()
     cp2_input[CONF_CPID] = "shared_cpid"
     result2 = await hass.config_entries.flow.async_configure(
@@ -256,137 +250,24 @@ async def test_duplicate_cpid_value_rejected(hass, bypass_get_data):
     assert len(entry.data[CONF_CPIDS]) == 2
 
 
-async def test_duplicate_cpid_value_rejected_across_entries(hass, bypass_get_data):
-    """A cpid must be unique across every OCPP config entry (central system).
-
-    Entity unique_id is built from DOMAIN + cpid only, with no per-entry
-    scoping, so a second central system reusing a cpid already used by a
-    charge point on a different central system would also collide.
-    """
-    entry_a = MockConfigEntry(
+async def test_second_server_is_rejected(hass, bypass_get_data):
+    """Only one HA OCPP server can be configured."""
+    entry = MockConfigEntry(
         domain=DOMAIN,
-        data={**MOCK_CONFIG_CS, "port": 9101},
-        entry_id="test_cms_dup_cpid_a",
-        title="test_cms_dup_cpid_a",
+        data=MOCK_CONFIG_CS,
+        entry_id="existing_server",
+        title=CONFIG_ENTRY_TITLE,
         version=2,
+        minor_version=4,
     )
-    entry_b_data = {**MOCK_CONFIG_CS, "port": 9102}
-    from custom_components.ha_ocpp.const import CONF_CSID
+    entry.add_to_hass(hass)
 
-    entry_b_data[CONF_CSID] = "test_csid_flow_b"
-    entry_b = MockConfigEntry(
-        domain=DOMAIN,
-        data=entry_b_data,
-        entry_id="test_cms_dup_cpid_b",
-        title="test_cms_dup_cpid_b",
-        version=2,
-    )
-    if hass.data.get(DOMAIN) is None:
-        hass.data.setdefault(DOMAIN, {})
-    entry_a.add_to_hass(hass)
-    entry_b.add_to_hass(hass)
-    # Setting up the first entry also brings up the HA OCPP component, which
-    # in turn loads every other already-registered entry of that domain
-    # (entry_b included), so a second explicit async_setup call for entry_b
-    # would find it already loaded.
-    assert await hass.config_entries.async_setup(entry_a.entry_id)
-    await hass.async_block_till_done()
-    assert entry_a.state is config_entries.ConfigEntryState.LOADED
-    assert entry_b.state is config_entries.ConfigEntryState.LOADED
-
-    # Charge point on central system A takes "shared_cpid".
-    result_a = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_INTEGRATION_DISCOVERY},
-        data={"cp_id": "cp_on_a", "entry": entry_a},
-    )
-    cp_a_input = MOCK_CONFIG_CP.copy()
-    cp_a_input[CONF_CPID] = "shared_cpid"
-    result_a = await hass.config_entries.flow.async_configure(
-        result_a["flow_id"], user_input=cp_a_input
-    )
-    assert result_a["type"] == data_entry_flow.FlowResultType.ABORT
-
-    # A charge point on the unrelated central system B tries to reuse it.
-    result_b = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_INTEGRATION_DISCOVERY},
-        data={"cp_id": "cp_on_b", "entry": entry_b},
-    )
-    cp_b_input = MOCK_CONFIG_CP.copy()
-    cp_b_input[CONF_CPID] = "shared_cpid"
-    result_b = await hass.config_entries.flow.async_configure(
-        result_b["flow_id"], user_input=cp_b_input
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
 
-    assert result_b["type"] == data_entry_flow.FlowResultType.FORM
-    assert result_b["errors"]["base"] == "duplicate_cpid"
-
-
-async def test_duplicate_cpid_rejected_when_cp_id_matches_on_another_entry(
-    hass, bypass_get_data
-):
-    """Two central systems can each have a charge point with the same cp_id.
-
-    cp_id is the OCPP-level identity, chosen by the charger, so it is not
-    unique across central systems. Excluding a record on cp_id alone would
-    also exclude the *other* system's charge point and let its cpid be reused.
-    """
-    from custom_components.ha_ocpp.const import CONF_CSID
-
-    entry_a = MockConfigEntry(
-        domain=DOMAIN,
-        data={**MOCK_CONFIG_CS, "port": 9111},
-        entry_id="test_cms_same_cpid_a",
-        title="test_cms_same_cpid_a",
-        version=2,
-    )
-    entry_b_data = {**MOCK_CONFIG_CS, "port": 9112}
-    entry_b_data[CONF_CSID] = "test_csid_same_cp_id_b"
-    entry_b = MockConfigEntry(
-        domain=DOMAIN,
-        data=entry_b_data,
-        entry_id="test_cms_same_cpid_b",
-        title="test_cms_same_cpid_b",
-        version=2,
-    )
-    if hass.data.get(DOMAIN) is None:
-        hass.data.setdefault(DOMAIN, {})
-    entry_a.add_to_hass(hass)
-    entry_b.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry_a.entry_id)
-    await hass.async_block_till_done()
-
-    # Both chargers announce themselves with the *same* cp_id.
-    compartido = "charger"
-
-    result_a = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_INTEGRATION_DISCOVERY},
-        data={"cp_id": compartido, "entry": entry_a},
-    )
-    cp_a_input = MOCK_CONFIG_CP.copy()
-    cp_a_input[CONF_CPID] = "taken_cpid"
-    result_a = await hass.config_entries.flow.async_configure(
-        result_a["flow_id"], user_input=cp_a_input
-    )
-    assert result_a["type"] == data_entry_flow.FlowResultType.ABORT
-
-    # The one on B shares the cp_id but is a different charge point, so it
-    # must not be able to take the cpid already in use on A.
-    result_b = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_INTEGRATION_DISCOVERY},
-        data={"cp_id": compartido, "entry": entry_b},
-    )
-    cp_b_input = MOCK_CONFIG_CP.copy()
-    cp_b_input[CONF_CPID] = "taken_cpid"
-    result_b = await hass.config_entries.flow.async_configure(
-        result_b["flow_id"], user_input=cp_b_input
-    )
-
-    assert result_b["type"] == data_entry_flow.FlowResultType.FORM
-    assert result_b["errors"]["base"] == "duplicate_cpid"
+    assert result["type"] == data_entry_flow.FlowResultType.ABORT
+    assert result["reason"] == "single_instance_allowed"
 
 
 async def test_duplicate_cpid_caught_at_measurands_step(hass, bypass_get_data):
@@ -409,11 +290,7 @@ async def test_duplicate_cpid_caught_at_measurands_step(hass, bypass_get_data):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_INTEGRATION_DISCOVERY},
-        data={"cp_id": "cp_race", "entry": entry},
-    )
+    result = await _start_charge_point_flow(hass, entry, "cp_race")
     cp_input = MOCK_CONFIG_CP.copy()
     cp_input[CONF_CPID] = "raced_cpid"
     cp_input[CONF_MONITORED_VARIABLES_AUTOCONFIG] = False
@@ -462,11 +339,7 @@ async def test_reconfigure_own_cpid_not_flagged_duplicate(hass, bypass_get_data)
     entry = hass.config_entries._entries.get_entries_for_domain(DOMAIN)[0]
 
     # Configure the charge point once.
-    result1 = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_INTEGRATION_DISCOVERY},
-        data={"cp_id": "cp_self", "entry": entry},
-    )
+    result1 = await _start_charge_point_flow(hass, entry, "cp_self")
     cp_input = MOCK_CONFIG_CP.copy()
     cp_input[CONF_CPID] = "self_cpid"
     result1 = await hass.config_entries.flow.async_configure(
@@ -476,11 +349,7 @@ async def test_reconfigure_own_cpid_not_flagged_duplicate(hass, bypass_get_data)
 
     # Run the cp_user step again for the same cp_id, submitting the same
     # cpid it already owns. It must not be treated as a duplicate of itself.
-    result2 = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_INTEGRATION_DISCOVERY},
-        data={"cp_id": "cp_self", "entry": entry},
-    )
+    result2 = await _start_charge_point_flow(hass, entry, "cp_self")
     result2 = await hass.config_entries.flow.async_configure(
         result2["flow_id"], user_input=cp_input
     )
@@ -559,6 +428,7 @@ async def test_reconfigure_flow(hass, bypass_get_data):
     # Change the OCPP version pin, keep everything else
     new_input = MOCK_CONFIG_CS.copy()
     new_input.pop(CONF_CPIDS)
+    new_input.pop(CONF_CSID)
     new_input[CONF_OCPP_VERSION] = "2.0.1"
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input=new_input
@@ -600,6 +470,7 @@ async def test_reconfigure_does_not_schedule_second_reload(hass, bypass_get_data
         result = await entry.start_reconfigure_flow(hass)
         new_input = MOCK_CONFIG_CS.copy()
         new_input.pop(CONF_CPIDS)
+        new_input.pop(CONF_CSID)
         new_input[CONF_OCPP_VERSION] = "2.0.1"
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], user_input=new_input

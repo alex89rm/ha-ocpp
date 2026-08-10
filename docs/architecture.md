@@ -40,19 +40,13 @@ Protocol handlers <--> AuthorizationManager <--> private HA Store
 Admin HA OCPP panel <--> admin WebSocket API <--> backend and entities
 ```
 
-One HA config entry owns one `CentralSystem` listener, its configured charging
-stations, and one authorization registry. A listener accepts WebSocket paths in
-the form `/<charge-point-identity>`. A previously unknown identity starts a
-Home Assistant integration-discovery flow; it is not silently added as a fully
-configured station.
-
-The config model and management panel can enumerate several entries on
-different ports, and panel commands carry an explicit `entry_id`. Multi-server
-operation is not yet a complete public contract, however: `ha_ocpp.*` services
-are domain-global but are currently registered by each `CentralSystem`, and
-unloading one entry removes those services. Until service ownership is moved to
-a domain-level router, one loaded central-system entry is the supported
-operational topology.
+HA OCPP has exactly one HA config entry. It owns one `CentralSystem` listener,
+its configured charging stations, and one authorization registry. Home
+Assistant's `single_config_entry` contract prevents a second server entry from
+being created. The listener accepts WebSocket paths in the form
+`/<charge-point-identity>`, so one server can host many wallboxes. A previously
+unknown identity starts a Home Assistant integration-discovery flow; it is not
+silently added as a fully configured station.
 
 The config entry stores server and station settings. Live OCPP metrics are kept
 in memory and exposed through entities. RFID users and credentials are stored
@@ -125,7 +119,7 @@ that the requested value is within the station's electrical rating.
 
 ## Authorization and Privacy
 
-`AuthorizationManager` evaluates OCPP authorization for each central system.
+`AuthorizationManager` evaluates OCPP authorization for the server.
 Unknown credentials are accepted by default for backwards compatibility; the
 administrator can enable registered-only mode. An enrollment scan is always
 rejected for charging and then captured for assignment.

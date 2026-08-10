@@ -2,11 +2,11 @@
     "config": {
         "step": {
             "user": {
-                "title": "OCPP Central System Configuration",
+                "title": "HA OCPP Server Configuration",
                 "description": "If you need help with the configuration have a look [here]({docs_url})",
                 "data": {
-                    "host": "Central system host address",
-                    "port": "Central system port number",
+                    "host": "Listen address",
+                    "port": "Listen port",
                     "ssl": "Secure connection",
                     "ssl_certfile_path": "Path to SSL certificate or (None)",
                     "ssl_keyfile_path": "Path to SSL key or (None)",
@@ -65,11 +65,11 @@
                 }
             },
             "reconfigure": {
-                "title": "OCPP Central System Configuration",
+                "title": "HA OCPP Server Configuration",
                 "description": "If you need help with the configuration have a look [here]({docs_url})",
                 "data": {
-                    "host": "Central system host address",
-                    "port": "Central system port number",
+                    "host": "Listen address",
+                    "port": "Listen port",
                     "ssl": "Secure connection",
                     "ssl_certfile_path": "Path to SSL certificate or (None)",
                     "ssl_keyfile_path": "Path to SSL key or (None)",
@@ -92,7 +92,7 @@
             "duplicate_cpid": "This charge point identity is already used by another charge point. Choose a unique one."
         },
         "abort": {
-            "single_instance_allowed": "Only a single instance is allowed",
+            "single_instance_allowed": "Only one HA OCPP server can be configured",
             "reauth_successful": "New charger configured",
             "reconfigure_successful": "Configuration updated"
         }
@@ -131,17 +131,17 @@
         "step": {
             "init": {
                 "title": "OCPP Configuration",
-                "description": "Select the central system, charger settings, or authorization management.",
+                "description": "Select server settings, charger settings, or authorization management.",
                 "data": {
                     "target": "Configuration target"
                 }
             },
             "server_settings": {
-                "title": "OCPP Central System Configuration",
-                "description": "Editing central system {csid}. Saving restarts the OCPP listener and briefly disconnects its chargers. Its identity is fixed because device identifiers derive from it.",
+                "title": "HA OCPP Server Configuration",
+                "description": "Saving restarts the OCPP listener and briefly disconnects its wallboxes.",
                 "data": {
-                    "host": "Central system host address",
-                    "port": "Central system port number",
+                    "host": "Listen address",
+                    "port": "Listen port",
                     "ssl": "Secure connection",
                     "ssl_certfile_path": "Path to SSL certificate or (None)",
                     "ssl_keyfile_path": "Path to SSL key or (None)",
@@ -157,7 +157,7 @@
             },
             "authorization": {
                 "title": "Authorization and RFID cards",
-                "description": "Manage the authorization policy, users, and RFID credentials for this central system.",
+                "description": "Manage the server authorization policy, users, and RFID credentials.",
                 "menu_options": {
                     "auth_settings": "Authorization policy",
                     "auth_add_user": "Add user",
@@ -341,7 +341,6 @@
         },
         "error": {
             "no_measurands_selected": "No measurand selected: please select at least one",
-            "port_in_use": "This port is already used by another OCPP central system.",
             "duplicate_user_name": "A user with this name already exists",
             "credential_already_assigned": "This card belongs to another user. Confirm the transfer to continue.",
             "rfid_enrollment_in_progress": "An RFID enrollment is already active for this charger",

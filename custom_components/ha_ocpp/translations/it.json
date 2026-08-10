@@ -1,11 +1,47 @@
 {
     "config": {
         "step": {
+            "user": {
+                "title": "Configurazione server HA OCPP",
+                "description": "Per assistenza consulta la [documentazione]({docs_url})",
+                "data": {
+                    "host": "Indirizzo di ascolto",
+                    "port": "Porta di ascolto",
+                    "ssl": "Connessione sicura",
+                    "ssl_certfile_path": "Percorso del certificato SSL o (None)",
+                    "ssl_keyfile_path": "Percorso della chiave SSL o (None)",
+                    "ocpp_version": "Versione OCPP",
+                    "websocket_close_timeout": "Timeout chiusura WebSocket (secondi)",
+                    "websocket_ping_tries": "Tentativi ping WebSocket prima della disconnessione",
+                    "websocket_ping_interval": "Intervallo ping WebSocket (secondi)",
+                    "websocket_ping_timeout": "Timeout ping WebSocket (secondi)"
+                }
+            },
+            "reconfigure": {
+                "title": "Configurazione server HA OCPP",
+                "description": "Il salvataggio riavvia il listener OCPP e disconnette brevemente le wallbox.",
+                "data": {
+                    "host": "Indirizzo di ascolto",
+                    "port": "Porta di ascolto",
+                    "ssl": "Connessione sicura",
+                    "ssl_certfile_path": "Percorso del certificato SSL o (None)",
+                    "ssl_keyfile_path": "Percorso della chiave SSL o (None)",
+                    "ocpp_version": "Versione OCPP",
+                    "websocket_close_timeout": "Timeout chiusura WebSocket (secondi)",
+                    "websocket_ping_tries": "Tentativi ping WebSocket prima della disconnessione",
+                    "websocket_ping_interval": "Intervallo ping WebSocket (secondi)",
+                    "websocket_ping_timeout": "Timeout ping WebSocket (secondi)"
+                }
+            },
             "cp_user": {
                 "data": {
                     "wallbox_profile": "Profilo wallbox"
                 }
             }
+        },
+        "abort": {
+            "single_instance_allowed": "È possibile configurare un solo server HA OCPP.",
+            "reconfigure_successful": "Configurazione aggiornata"
         }
     },
     "exceptions": {
@@ -34,9 +70,25 @@
         "step": {
             "init": {
                 "title": "Configurazione OCPP",
-                "description": "Seleziona le impostazioni della wallbox oppure gestisci l'autorizzazione centrale.",
+                "description": "Seleziona le impostazioni del server, di una wallbox oppure gestisci l'autorizzazione.",
                 "data": {
                     "target": "Elemento da configurare"
+                }
+            },
+            "server_settings": {
+                "title": "Configurazione server HA OCPP",
+                "description": "Il salvataggio riavvia il listener OCPP e disconnette brevemente le wallbox.",
+                "data": {
+                    "host": "Indirizzo di ascolto",
+                    "port": "Porta di ascolto",
+                    "ssl": "Connessione sicura",
+                    "ssl_certfile_path": "Percorso del certificato SSL o (None)",
+                    "ssl_keyfile_path": "Percorso della chiave SSL o (None)",
+                    "ocpp_version": "Versione OCPP",
+                    "websocket_close_timeout": "Timeout chiusura WebSocket (secondi)",
+                    "websocket_ping_tries": "Tentativi ping WebSocket prima della disconnessione",
+                    "websocket_ping_interval": "Intervallo ping WebSocket (secondi)",
+                    "websocket_ping_timeout": "Timeout ping WebSocket (secondi)"
                 }
             },
             "cp_settings": {
@@ -46,7 +98,7 @@
             },
             "authorization": {
                 "title": "Autorizzazione e tessere RFID",
-                "description": "Gestisci la policy di autorizzazione, gli utenti e le tessere RFID di questo Central System.",
+                "description": "Gestisci la policy di autorizzazione del server, gli utenti e le tessere RFID.",
                 "menu_options": {
                     "auth_settings": "Policy di autorizzazione",
                     "auth_add_user": "Aggiungi utente",

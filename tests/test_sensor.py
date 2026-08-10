@@ -20,6 +20,8 @@ from custom_components.ha_ocpp.const import (
     CONF_NUM_CONNECTORS,
     DATA_UPDATED,
     DOMAIN as OCPP_DOMAIN,
+    SERVER_DEVICE_MODEL,
+    SERVER_DEVICE_NAME,
 )
 from custom_components.ha_ocpp.enums import HAChargerSession, HAChargerStatuses
 
@@ -69,6 +71,13 @@ async def test_central_system_has_diagnostic_sensor_without_chargers(
         "ocpp2.0.1",
         "ocpp2.1",
     ]
+    server_device = dr.async_get(hass).async_get_device(
+        {(OCPP_DOMAIN, "test_central_status")}
+    )
+    assert server_device is not None
+    assert server_device.name == SERVER_DEVICE_NAME
+    assert server_device.manufacturer == "HA OCPP"
+    assert server_device.model == SERVER_DEVICE_MODEL
 
     await remove_configuration(hass, config_entry)
 

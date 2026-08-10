@@ -22,7 +22,7 @@ package.
   protocol quirks.
 - Automatic profile selection from BootNotification vendor and model metadata,
   with an explicit administrator override.
-- One supported central-system listener containing one or more wallboxes.
+- Exactly one OCPP server listener containing one or more wallboxes.
 - Station-wide persistent current or power limits based on the charging-rate
   units advertised by each OCPP 1.6 charger.
 - Separate current limits for every connector on multi-connector stations.

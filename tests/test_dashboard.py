@@ -19,7 +19,7 @@ from custom_components.ocpp.const import (
 from custom_components.ocpp.dashboard import (
     WALLBOX_COMMAND_SCHEMA,
     _available_connector_actions,
-    _safe_authorization_snapshot,
+    _authorization_snapshot,
     dashboard_snapshot,
 )
 from custom_components.ocpp.wallbox_profiles import WallboxIdentity, select_profile
@@ -61,17 +61,16 @@ def _authorization_manager():
     )
 
 
-def test_authorization_snapshot_masks_every_token():
-    """The browser API must never receive complete RFID credentials."""
+def test_authorization_snapshot_exposes_tokens_to_admin_dashboard():
+    """The admin-only browser API exposes the RFID code requested by the user."""
     central = SimpleNamespace(authorization=_authorization_manager())
 
-    snapshot = _safe_authorization_snapshot(central)
+    snapshot = _authorization_snapshot(central)
     serialized = json.dumps(snapshot)
 
-    assert RAW_TOKEN not in serialized
-    assert "PENDING-SECRET-9876" not in serialized
-    assert snapshot["users"][0]["credentials"][0]["masked_token"].endswith("3456")
-    assert "token" not in snapshot["users"][0]["credentials"][0]
+    assert RAW_TOKEN in serialized
+    assert "PENDING-SECRET-9876" in serialized
+    assert snapshot["users"][0]["credentials"][0]["token"] == RAW_TOKEN
 
 
 def test_wallbox_command_schema_rejects_negative_connector():
@@ -91,7 +90,7 @@ def test_wallbox_command_schema_rejects_negative_connector():
 @pytest.mark.parametrize(
     ("status", "connected", "actions"),
     [
-        ("Available", True, ("start",)),
+        ("Available", True, ()),
         ("Preparing", True, ("start", "unlock")),
         ("Charging", True, ("stop",)),
         ("SuspendedEV", True, ("stop",)),
@@ -177,4 +176,4 @@ def test_dashboard_snapshot_exposes_profile_and_each_connector(hass, monkeypatch
         ["stop"],
         ["stop"],
     ]
-    assert RAW_TOKEN not in json.dumps(snapshot)
+    assert RAW_TOKEN in json.dumps(snapshot)

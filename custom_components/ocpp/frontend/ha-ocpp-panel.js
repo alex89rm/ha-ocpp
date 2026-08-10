@@ -60,11 +60,19 @@ const TEXT = {
     noUsers: "Nessun utente registrato",
     cards: "Tessere",
     noCards: "Nessuna tessera associata",
+    cardCode: "Codice tessera",
+    noLabel: "Nessuna etichetta",
     label: "Etichetta",
     status: "Stato",
     active: "Attiva",
     inactive: "Disattiva",
     delete: "Elimina",
+    edit: "Modifica",
+    deleteUser: "Elimina utente",
+    deleteCard: "Elimina tessera",
+    confirmDeleteUser: "Eliminare questo utente e tutte le tessere associate?",
+    confirmDeleteCard: "Eliminare questa tessera?",
+    confirmDiscard: "Scartare questa tessera non assegnata?",
     pending: "In attesa",
     assign: "Assegna",
     discard: "Scarta",
@@ -148,11 +156,19 @@ const TEXT = {
     noUsers: "No registered users",
     cards: "Cards",
     noCards: "No associated cards",
+    cardCode: "Card code",
+    noLabel: "No label",
     label: "Label",
     status: "Status",
     active: "Active",
     inactive: "Inactive",
     delete: "Delete",
+    edit: "Edit",
+    deleteUser: "Delete user",
+    deleteCard: "Delete card",
+    confirmDeleteUser: "Delete this user and all associated cards?",
+    confirmDeleteCard: "Delete this card?",
+    confirmDiscard: "Discard this unassigned card?",
     pending: "Pending",
     assign: "Assign",
     discard: "Discard",
@@ -188,6 +204,9 @@ class HaOcppPanel extends HTMLElement {
     this._error = "";
     this._entryId = "";
     this._modal = null;
+    this._expandedUserId = "";
+    this._editingUserId = "";
+    this._editingCredentialId = "";
     this._unsubscribe = null;
     this._refreshTimer = null;
   }
@@ -625,34 +644,62 @@ class HaOcppPanel extends HTMLElement {
 
   _pendingCard(entry, card) {
     const t = this._t;
-    return `<article class="pending-row"><div class="pending-icon"><ha-icon icon="mdi:card-account-details-outline"></ha-icon></div><div><strong>${this._escape(card.masked_token)}</strong><span>${this._escape(card.cp_id)}</span></div><div class="row-actions"><button class="secondary assign-pending" data-entry-id="${this._escape(entry.entry_id)}" data-pending-id="${this._escape(card.id)}" ${entry.authorization.users.length ? "" : "disabled"}><ha-icon icon="mdi:account-arrow-left-outline"></ha-icon>${t.assign}</button><button class="icon-button auth-command" title="${t.discard}" data-action="discard_pending" data-entry-id="${this._escape(entry.entry_id)}" data-pending-id="${this._escape(card.id)}"><ha-icon icon="mdi:delete-outline"></ha-icon></button></div></article>`;
+    return `<article class="pending-row"><div class="pending-icon"><ha-icon icon="mdi:card-account-details-outline"></ha-icon></div><div><strong>${this._escape(card.token)}</strong><span>${this._escape(card.cp_id)}</span></div><div class="row-actions"><button class="secondary assign-pending" data-entry-id="${this._escape(entry.entry_id)}" data-pending-id="${this._escape(card.id)}" ${entry.authorization.users.length ? "" : "disabled"}><ha-icon icon="mdi:account-arrow-left-outline"></ha-icon>${t.assign}</button><button class="icon-button auth-command" title="${t.discard}" data-confirm="${this._escape(t.confirmDiscard)}" data-action="discard_pending" data-entry-id="${this._escape(entry.entry_id)}" data-pending-id="${this._escape(card.id)}"><ha-icon icon="mdi:delete-outline"></ha-icon></button></div></article>`;
   }
 
   _userCard(entry, user) {
     const t = this._t;
+    const expanded = this._expandedUserId === user.id;
+    const editingUser = this._editingUserId === user.id;
     return `<article class="user-row">
-      <form class="user-form" data-entry-id="${this._escape(entry.entry_id)}" data-user-id="${this._escape(user.id)}">
-        <div class="user-avatar"><ha-icon icon="mdi:account-outline"></ha-icon></div>
-        <label class="grow"><span class="sr-only">${t.userName}</span><input name="name" value="${this._escape(user.name)}" required></label>
-        <label class="check-label"><input name="enabled" type="checkbox" ${user.enabled ? "checked" : ""}>${user.enabled ? t.active : t.inactive}</label>
-        <button class="icon-button" type="submit" title="${t.save}"><ha-icon icon="mdi:content-save-outline"></ha-icon></button>
-        <button class="icon-button danger auth-command" type="button" title="${t.delete}" data-action="delete_user" data-entry-id="${this._escape(entry.entry_id)}" data-user-id="${this._escape(user.id)}"><ha-icon icon="mdi:delete-outline"></ha-icon></button>
-      </form>
-      <div class="credentials"><div class="credentials-title"><span>${t.cards}</span><small>${user.credentials.length}</small></div>${user.credentials.length ? user.credentials.map((credential) => this._credential(entry, credential)).join("") : `<div class="no-credentials">${t.noCards}</div>`}</div>
+      <div class="user-summary">
+        <button class="user-toggle" type="button" data-user-id="${this._escape(user.id)}" aria-expanded="${expanded}">
+          <span class="user-avatar"><ha-icon icon="mdi:account-outline"></ha-icon></span>
+          <span class="user-summary-copy"><strong>${this._escape(user.name)}</strong><small>${user.credentials.length} ${t.cards.toLowerCase()}</small></span>
+          <span class="record-state ${user.enabled ? "enabled" : "disabled"}"><i></i>${user.enabled ? t.active : t.inactive}</span>
+          <ha-icon class="expand-icon" icon="mdi:chevron-down"></ha-icon>
+        </button>
+        <button class="icon-button edit-user" type="button" title="${t.edit}" data-user-id="${this._escape(user.id)}"><ha-icon icon="mdi:pencil-outline"></ha-icon></button>
+      </div>
+      ${expanded ? `<div class="user-details">
+        ${editingUser ? this._userEditor(entry, user) : ""}
+        <div class="credentials-title"><span>${t.cards}</span><small>${user.credentials.length}</small></div>
+        <div class="credential-list">${user.credentials.length ? user.credentials.map((credential) => this._credential(entry, user, credential)).join("") : `<div class="no-credentials">${t.noCards}</div>`}</div>
+      </div>` : ""}
     </article>`;
   }
 
-  _credential(entry, credential) {
+  _userEditor(entry, user) {
     const t = this._t;
-    const statuses = entry.authorization.statuses || [];
-    return `<form class="credential-row" data-entry-id="${this._escape(entry.entry_id)}" data-credential-id="${this._escape(credential.id)}">
-      <code>${this._escape(credential.masked_token)}</code>
-      <label><span class="sr-only">${t.label}</span><input name="label" placeholder="${t.label}" value="${this._escape(credential.label)}"></label>
-      <label><span class="sr-only">${t.status}</span><select name="authorization_status">${statuses.map((status) => `<option value="${this._escape(status)}" ${status === credential.authorization_status ? "selected" : ""}>${this._escape(status)}</option>`).join("")}</select></label>
-      <label class="switch small"><input name="enabled" type="checkbox" ${credential.enabled ? "checked" : ""}><span></span></label>
-      <button class="icon-button" type="submit" title="${t.save}"><ha-icon icon="mdi:content-save-outline"></ha-icon></button>
-      <button class="icon-button danger auth-command" type="button" title="${t.delete}" data-action="delete_credential" data-entry-id="${this._escape(entry.entry_id)}" data-credential-id="${this._escape(credential.id)}"><ha-icon icon="mdi:delete-outline"></ha-icon></button>
+    return `<form class="user-form" data-entry-id="${this._escape(entry.entry_id)}" data-user-id="${this._escape(user.id)}">
+      <label class="grow"><span>${t.userName}</span><input name="name" value="${this._escape(user.name)}" required></label>
+      <label class="check-label"><input name="enabled" type="checkbox" ${user.enabled ? "checked" : ""}>${user.enabled ? t.active : t.inactive}</label>
+      <div class="editor-actions"><button class="secondary cancel-user-edit" type="button">${t.cancel}</button><button class="primary" type="submit"><ha-icon icon="mdi:content-save-outline"></ha-icon>${t.save}</button></div>
+      <div class="danger-zone"><button class="secondary danger-command auth-command" type="button" data-confirm="${this._escape(t.confirmDeleteUser)}" data-action="delete_user" data-entry-id="${this._escape(entry.entry_id)}" data-user-id="${this._escape(user.id)}"><ha-icon icon="mdi:delete-outline"></ha-icon>${t.deleteUser}</button></div>
     </form>`;
+  }
+
+  _credential(entry, user, credential) {
+    const t = this._t;
+    const editing = this._editingCredentialId === credential.id;
+    const statuses = entry.authorization.statuses || [];
+    if (editing) {
+      return `<form class="credential-form" data-entry-id="${this._escape(entry.entry_id)}" data-credential-id="${this._escape(credential.id)}">
+        <div class="credential-token"><span>${t.cardCode}</span><code>${this._escape(credential.token)}</code></div>
+        <label><span>${t.label}</span><input name="label" placeholder="${t.label}" value="${this._escape(credential.label)}"></label>
+        <label><span>${t.status}</span><select name="authorization_status">${statuses.map((status) => `<option value="${this._escape(status)}" ${status === credential.authorization_status ? "selected" : ""}>${this._escape(status)}</option>`).join("")}</select></label>
+        <label class="check-label"><input name="enabled" type="checkbox" ${credential.enabled ? "checked" : ""}>${credential.enabled ? t.active : t.inactive}</label>
+        <div class="editor-actions"><button class="secondary cancel-credential-edit" type="button">${t.cancel}</button><button class="primary" type="submit"><ha-icon icon="mdi:content-save-outline"></ha-icon>${t.save}</button></div>
+        <div class="danger-zone"><button class="secondary danger-command auth-command" type="button" data-confirm="${this._escape(t.confirmDeleteCard)}" data-action="delete_credential" data-entry-id="${this._escape(entry.entry_id)}" data-credential-id="${this._escape(credential.id)}"><ha-icon icon="mdi:delete-outline"></ha-icon>${t.deleteCard}</button></div>
+      </form>`;
+    }
+    return `<div class="credential-row">
+      <div class="credential-token"><span>${t.cardCode}</span><code>${this._escape(credential.token)}</code></div>
+      <div class="credential-label"><span>${t.label}</span><strong>${this._escape(credential.label || t.noLabel)}</strong></div>
+      <span class="credential-status">${this._escape(credential.authorization_status)}</span>
+      <span class="record-state ${credential.enabled ? "enabled" : "disabled"}"><i></i>${credential.enabled ? t.active : t.inactive}</span>
+      <button class="icon-button edit-credential" type="button" title="${t.edit}" data-user-id="${this._escape(user.id)}" data-credential-id="${this._escape(credential.id)}"><ha-icon icon="mdi:pencil-outline"></ha-icon></button>
+    </div>`;
   }
 
   _renderServers() {
@@ -705,6 +752,9 @@ class HaOcppPanel extends HTMLElement {
     });
     root.querySelector("#entry-select")?.addEventListener("change", (event) => {
       this._entryId = event.target.value;
+      this._expandedUserId = "";
+      this._editingUserId = "";
+      this._editingCredentialId = "";
       this._render();
     });
     root.querySelector('[data-action="retry"]')?.addEventListener("click", () => this._load());
@@ -756,13 +806,43 @@ class HaOcppPanel extends HTMLElement {
     root.querySelector("#assign-form")?.addEventListener("submit", (event) => {
       event.preventDefault(); const data = new FormData(event.target); const modal = this._modal; this._modal = null; this._command({ type: "ha_ocpp/authorization/command", entry_id: modal.entryId, action: "assign_pending", pending_id: modal.pendingId, user_id: data.get("user_id"), label: data.get("label") });
     });
-    root.querySelectorAll(".user-form").forEach((form) => form.addEventListener("submit", (event) => {
-      event.preventDefault(); const data = new FormData(form); this._command({ type: "ha_ocpp/authorization/command", entry_id: form.dataset.entryId, action: "update_user", user_id: form.dataset.userId, name: data.get("name"), enabled: data.get("enabled") === "on" });
+    root.querySelectorAll(".user-toggle").forEach((button) => button.addEventListener("click", () => {
+      const userId = button.dataset.userId;
+      this._expandedUserId = this._expandedUserId === userId ? "" : userId;
+      if (!this._expandedUserId) {
+        this._editingUserId = "";
+        this._editingCredentialId = "";
+      }
+      this._render();
     }));
-    root.querySelectorAll(".credential-row").forEach((form) => form.addEventListener("submit", (event) => {
-      event.preventDefault(); const data = new FormData(form); this._command({ type: "ha_ocpp/authorization/command", entry_id: form.dataset.entryId, action: "update_credential", credential_id: form.dataset.credentialId, label: data.get("label"), enabled: data.get("enabled") === "on", authorization_status: data.get("authorization_status") });
+    root.querySelectorAll(".edit-user").forEach((button) => button.addEventListener("click", () => {
+      this._expandedUserId = button.dataset.userId;
+      this._editingUserId = button.dataset.userId;
+      this._editingCredentialId = "";
+      this._render();
+    }));
+    root.querySelectorAll(".cancel-user-edit").forEach((button) => button.addEventListener("click", () => {
+      this._editingUserId = "";
+      this._render();
+    }));
+    root.querySelectorAll(".edit-credential").forEach((button) => button.addEventListener("click", () => {
+      this._expandedUserId = button.dataset.userId;
+      this._editingUserId = "";
+      this._editingCredentialId = button.dataset.credentialId;
+      this._render();
+    }));
+    root.querySelectorAll(".cancel-credential-edit").forEach((button) => button.addEventListener("click", () => {
+      this._editingCredentialId = "";
+      this._render();
+    }));
+    root.querySelectorAll(".user-form").forEach((form) => form.addEventListener("submit", (event) => {
+      event.preventDefault(); const data = new FormData(form); this._editingUserId = ""; this._command({ type: "ha_ocpp/authorization/command", entry_id: form.dataset.entryId, action: "update_user", user_id: form.dataset.userId, name: data.get("name"), enabled: data.get("enabled") === "on" });
+    }));
+    root.querySelectorAll(".credential-form").forEach((form) => form.addEventListener("submit", (event) => {
+      event.preventDefault(); const data = new FormData(form); this._editingCredentialId = ""; this._command({ type: "ha_ocpp/authorization/command", entry_id: form.dataset.entryId, action: "update_credential", credential_id: form.dataset.credentialId, label: data.get("label"), enabled: data.get("enabled") === "on", authorization_status: data.get("authorization_status") });
     }));
     root.querySelectorAll(".auth-command").forEach((button) => button.addEventListener("click", () => {
+      if (button.dataset.confirm && !globalThis.confirm(button.dataset.confirm)) return;
       this._command({ type: "ha_ocpp/authorization/command", entry_id: button.dataset.entryId, action: button.dataset.action, ...(button.dataset.userId && { user_id: button.dataset.userId }), ...(button.dataset.credentialId && { credential_id: button.dataset.credentialId }), ...(button.dataset.pendingId && { pending_id: button.dataset.pendingId }) });
     }));
     root.querySelectorAll(".server-form").forEach((form) => form.addEventListener("submit", (event) => {
@@ -806,9 +886,10 @@ class HaOcppPanel extends HTMLElement {
       .section-title { min-height:30px; display:flex; align-items:center; gap:8px; margin-bottom:10px; }
       .count { min-width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; color:var(--secondary-text-color); background:var(--secondary-background-color); border-radius:12px; font-size:12px; }
       .compact-list, .user-list, .pending-list, .server-list { display:flex; flex-direction:column; gap:10px; }
-      .overview-row { min-height:102px; display:grid; grid-template-columns:76px minmax(180px, 1fr) auto minmax(120px, .35fr) 40px; align-items:center; gap:16px; padding:12px 14px; background:var(--card-background-color, #fff); border:1px solid var(--divider-color, #ddd); border-radius:8px; }
-      .product-visual { width:76px; height:76px; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:6px; background:#fff; }
+      .overview-row { min-height:114px; display:grid; grid-template-columns:88px minmax(180px, 1fr) auto minmax(120px, .35fr) 40px; align-items:center; gap:16px; padding:12px 14px; background:var(--card-background-color, #fff); border:1px solid var(--divider-color, #ddd); border-radius:8px; }
+      .product-visual { width:88px; height:88px; display:flex; align-items:center; justify-content:center; overflow:hidden; background:transparent; }
       .product-visual img { width:100%; height:100%; object-fit:contain; }
+      .product-visual.fallback { border-radius:6px; background:var(--secondary-background-color, #f5f5f5); }
       .product-visual ha-icon { width:36px; height:36px; color:#367e89; }
       .overview-main { min-width:0; display:flex; flex-direction:column; gap:4px; }
       .overview-main strong, .overview-main span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -829,8 +910,8 @@ class HaOcppPanel extends HTMLElement {
       .wallbox-state.state-unavailable, .wallbox-state.state-offline, .wallbox-state.state-unknown { color:#687277; }
       .wallbox-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 580px), 1fr)); gap:16px; }
       .wallbox-card { overflow:hidden; background:var(--card-background-color, #fff); border:1px solid var(--divider-color, #ddd); border-radius:8px; }
-      .wallbox-head { min-height:116px; display:grid; grid-template-columns:88px minmax(0, 1fr) auto; align-items:center; gap:16px; padding:14px 18px; border-bottom:1px solid var(--divider-color, #ddd); }
-      .wallbox-head .product-visual { width:88px; height:88px; }
+      .wallbox-head { min-height:140px; display:grid; grid-template-columns:112px minmax(0, 1fr) auto; align-items:center; gap:18px; padding:14px 18px; border-bottom:1px solid var(--divider-color, #ddd); }
+      .wallbox-head .product-visual { width:112px; height:112px; }
       .wallbox-title { min-width:0; }
       .wallbox-title h2, .wallbox-title p { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
       .wallbox-title p { margin-top:4px; color:var(--secondary-text-color); font-size:13px; }
@@ -905,16 +986,35 @@ class HaOcppPanel extends HTMLElement {
       .pending-row span { color:var(--secondary-text-color); font-size:12px; }
       .pending-icon { width:38px; height:38px; display:flex; align-items:center; justify-content:center; color:#956900; background:#fff4d6; border-radius:6px; }
       .user-row { overflow:hidden; background:var(--card-background-color, #fff); border:1px solid var(--divider-color, #ddd); border-radius:8px; }
-      .user-form { min-height:66px; display:grid; grid-template-columns:42px minmax(160px, 1fr) auto 40px 40px; align-items:center; gap:9px; padding:11px 14px; }
+      .user-summary { min-height:70px; display:grid; grid-template-columns:minmax(0, 1fr) 48px; align-items:center; }
+      .user-toggle { min-width:0; height:100%; min-height:70px; display:grid; grid-template-columns:42px minmax(0, 1fr) auto 24px; align-items:center; gap:12px; padding:10px 8px 10px 14px; color:var(--primary-text-color); text-align:left; background:transparent; border:0; }
+      .user-toggle:hover { background:var(--secondary-background-color, #f5f5f5); }
       .user-avatar { width:38px; height:38px; display:flex; align-items:center; justify-content:center; color:#367e89; background:var(--secondary-background-color, #f5f5f5); border-radius:50%; }
+      .user-summary-copy { min-width:0; display:flex; flex-direction:column; gap:4px; }
+      .user-summary-copy strong, .user-summary-copy small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .user-summary-copy small { color:var(--secondary-text-color); font-size:12px; }
+      .expand-icon { color:var(--secondary-text-color); transition:transform .15s ease; }
+      .user-toggle[aria-expanded="true"] .expand-icon { transform:rotate(180deg); }
+      .record-state { display:inline-flex; align-items:center; gap:6px; color:var(--secondary-text-color); font-size:12px; white-space:nowrap; }
+      .record-state i { width:7px; height:7px; border-radius:50%; background:#9e9e9e; }
+      .record-state.enabled { color:#217a4b; }
+      .record-state.enabled i { background:#2eaf68; }
+      .user-details { padding:14px 16px 16px 68px; border-top:1px solid var(--divider-color, #ddd); }
+      .user-form { display:grid; grid-template-columns:minmax(180px, 1fr) auto; align-items:end; gap:12px; margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid var(--divider-color, #ddd); }
       .grow input { width:100%; }
       .check-label { flex-direction:row; align-items:center; gap:7px; color:var(--primary-text-color); }
       .check-label input { width:18px; height:18px; padding:0; accent-color:var(--primary-color, #0288d1); }
-      .credentials { padding:0 14px 12px 65px; }
-      .credentials-title { display:flex; align-items:center; gap:6px; margin:4px 0 8px; color:var(--secondary-text-color); font-size:12px; }
+      .editor-actions { display:flex; justify-content:flex-end; gap:8px; grid-column:1 / -1; }
+      .danger-zone { display:flex; justify-content:flex-end; grid-column:1 / -1; padding-top:12px; border-top:1px solid var(--divider-color, #ddd); }
+      .credentials-title { display:flex; align-items:center; gap:6px; margin:0 0 8px; color:var(--secondary-text-color); font-size:12px; }
       .credentials-title small { min-width:20px; text-align:center; }
-      .credential-row { min-height:52px; display:grid; grid-template-columns:110px minmax(120px, 1fr) 130px 42px 40px 40px; align-items:center; gap:8px; padding:6px 0; border-top:1px solid var(--divider-color, #ddd); }
-      .credential-row code { font-size:12px; }
+      .credential-list { border-top:1px solid var(--divider-color, #ddd); }
+      .credential-row { min-height:64px; display:grid; grid-template-columns:minmax(150px, 1.3fr) minmax(120px, 1fr) 110px 90px 40px; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--divider-color, #ddd); }
+      .credential-token, .credential-label { min-width:0; display:flex; flex-direction:column; gap:4px; }
+      .credential-token span, .credential-label span { color:var(--secondary-text-color); font-size:10px; text-transform:uppercase; }
+      .credential-token code, .credential-label strong { overflow-wrap:anywhere; font-size:12px; }
+      .credential-status { color:var(--secondary-text-color); font-size:12px; }
+      .credential-form { display:grid; grid-template-columns:minmax(150px, 1.3fr) minmax(120px, 1fr) 130px auto; align-items:end; gap:12px; padding:14px 0; border-bottom:1px solid var(--divider-color, #ddd); }
       .no-credentials { padding:8px 0; color:var(--secondary-text-color); font-size:12px; border-top:1px solid var(--divider-color, #ddd); }
       .server-block { overflow:hidden; background:var(--card-background-color, #fff); border:1px solid var(--divider-color, #ddd); border-radius:8px; }
       .server-head { min-height:76px; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 18px; border-bottom:1px solid var(--divider-color, #ddd); }
@@ -937,7 +1037,9 @@ class HaOcppPanel extends HTMLElement {
       @media (max-width:900px) {
         .identity-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
         .server-form { grid-template-columns:repeat(2, minmax(140px, 1fr)); }
-        .credential-row { grid-template-columns:100px minmax(110px, 1fr) 110px 38px 36px 36px; }
+        .credential-row { grid-template-columns:minmax(140px, 1fr) minmax(110px, .8fr) 90px 40px; }
+        .credential-row .record-state { display:none; }
+        .credential-form { grid-template-columns:repeat(2, minmax(140px, 1fr)); }
       }
       @media (max-width:650px) {
         header { height:56px; padding:0 16px; }
@@ -954,14 +1056,14 @@ class HaOcppPanel extends HTMLElement {
         .summary { min-height:84px; padding:12px; gap:10px; }
         .summary > ha-icon { width:28px; height:28px; }
         .summary strong { font-size:20px; }
-        .overview-row { grid-template-columns:60px minmax(0, 1fr) 40px; gap:8px 12px; }
-        .overview-row .product-visual { width:60px; height:60px; grid-column:1; grid-row:1 / 4; }
+        .overview-row { grid-template-columns:72px minmax(0, 1fr) 40px; gap:8px 12px; }
+        .overview-row .product-visual { width:72px; height:72px; grid-column:1; grid-row:1 / 4; }
         .overview-row .overview-main { grid-column:2; grid-row:1; }
         .overview-row .wallbox-state { grid-column:2; grid-row:2; }
         .overview-row .overview-metric { grid-column:2; grid-row:3; }
         .overview-row .icon-button { grid-column:3; grid-row:1 / 4; }
-        .wallbox-head { grid-template-columns:68px minmax(0, 1fr); gap:10px 14px; padding:14px; }
-        .wallbox-head .product-visual { width:68px; height:68px; grid-column:1; grid-row:1 / 3; }
+        .wallbox-head { grid-template-columns:86px minmax(0, 1fr); gap:10px 14px; padding:14px; }
+        .wallbox-head .product-visual { width:86px; height:86px; grid-column:1; grid-row:1 / 3; }
         .wallbox-head .wallbox-title { grid-column:2; grid-row:1; }
         .wallbox-head .wallbox-state { grid-column:2; grid-row:2; }
         .identity-grid { padding:12px 14px; }
@@ -973,12 +1075,16 @@ class HaOcppPanel extends HTMLElement {
         .profile-form button, .wallbox-settings-form button { width:100%; }
         .pending-row { grid-template-columns:40px minmax(0, 1fr); }
         .pending-row .row-actions { grid-column:1 / -1; justify-content:flex-end; }
-        .user-form { grid-template-columns:38px minmax(0, 1fr) 36px 36px; padding:10px; }
-        .user-form .check-label { grid-column:2; }
-        .credentials { padding:0 10px 10px; }
-        .credential-row { grid-template-columns:minmax(90px, 1fr) 90px 36px 36px; gap:6px; }
-        .credential-row label:first-of-type { grid-column:1 / 3; }
-        .credential-row .switch { justify-content:center; }
+        .user-toggle { grid-template-columns:42px minmax(0, 1fr) 24px; gap:9px; }
+        .user-toggle .record-state { display:none; }
+        .user-details { padding:12px; }
+        .user-form { grid-template-columns:1fr; }
+        .user-form .editor-actions, .user-form .danger-zone { grid-column:1; }
+        .credential-row { grid-template-columns:minmax(0, 1fr) 40px; gap:7px 10px; padding:10px 0; }
+        .credential-row .credential-token, .credential-row .credential-label, .credential-row .credential-status { grid-column:1; }
+        .credential-row .icon-button { grid-column:2; grid-row:1 / 4; }
+        .credential-form { grid-template-columns:1fr; }
+        .credential-form .editor-actions, .credential-form .danger-zone { grid-column:1; }
         .server-form { grid-template-columns:1fr; padding:14px; }
         .server-picker select { min-width:130px; max-width:45vw; }
         .icon-action { min-width:42px; width:42px; padding:0; }

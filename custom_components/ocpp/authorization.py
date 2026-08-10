@@ -68,6 +68,16 @@ class EnrollmentResult:
     pending_id: str | None
 
 
+@dataclass(frozen=True)
+class CredentialIdentity:
+    """User-facing identity assigned to an RFID credential."""
+
+    user_id: str
+    user_name: str
+    credential_id: str
+    credential_label: str
+
+
 @dataclass
 class _EnrollmentSession:
     """An in-memory RFID enrollment session."""
@@ -368,11 +378,23 @@ class AuthorizationManager:
 
     def user_for_token(self, token: str) -> tuple[str, str] | None:
         """Return the assigned user id and display name for a token."""
+        identity = self.identity_for_token(token)
+        if identity is None:
+            return None
+        return identity.user_id, identity.user_name
+
+    def identity_for_token(self, token: str) -> CredentialIdentity | None:
+        """Return the user and credential identity assigned to a token."""
         match = self._find_credential(token)
         if match is None:
             return None
-        user_id, user, _ = match
-        return user_id, user["name"]
+        user_id, user, credential = match
+        return CredentialIdentity(
+            user_id=user_id,
+            user_name=user["name"],
+            credential_id=credential["id"],
+            credential_label=credential["label"],
+        )
 
     def authorization_status(self, token: str, cp_id: str | None = None) -> str:
         """Evaluate a credential without causing side effects."""

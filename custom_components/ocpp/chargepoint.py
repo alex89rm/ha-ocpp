@@ -11,8 +11,9 @@ from math import sqrt
 import secrets
 import string
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from homeassistant.components.logbook import async_log_entry
 from homeassistant.components.persistent_notification import DOMAIN as PN_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -38,14 +39,7 @@ from ocpp.v201 import call_result as call_resultv201
 from ocpp.messages import CallError
 from ocpp.exceptions import NotImplementedError
 
-from .enums import (
-    HAChargerDetails as cdet,
-    HAChargerSession as csess,
-    HAChargerStatuses as cstat,
-    OcppMisc as om,
-    Profiles as prof,
-)
-
+from .authorization import mask_token
 from .const import (
     CentralSystemSettings,
     ChargerSystemSettings,
@@ -68,11 +62,19 @@ from .const import (
     DEFAULT_MEASURAND,
     DEFAULT_WALLBOX_PROFILE,
     DOMAIN,
+    EVENT_TRANSACTION_STARTED,
     HA_ENERGY_UNIT,
     HA_POWER_UNIT,
     UNITS_OCCP_TO_HA,
     charging_rate_unit_from_token,
     normalize_charging_rate_units,
+)
+from .enums import (
+    HAChargerDetails as cdet,
+    HAChargerSession as csess,
+    HAChargerStatuses as cstat,
+    OcppMisc as om,
+    Profiles as prof,
 )
 from .wallbox_profiles import WallboxIdentity, select_profile
 
@@ -302,6 +304,42 @@ class ChargePoint(cp):
         alphabet = string.ascii_uppercase + string.digits
         self._remote_id_tag = "".join(secrets.choice(alphabet) for i in range(20))
         self.num_connectors: int = DEFAULT_NUM_CONNECTORS
+
+    def log_transaction_started(
+        self, id_tag: str, connector_id: int, transaction_id: int | str
+    ) -> None:
+        """Record the registered user who started a charging transaction."""
+        if self.authorization is None:
+            return
+        identity = self.authorization.identity_for_token(id_tag)
+        if identity is None:
+            return
+
+        card_name = identity.credential_label or mask_token(id_tag)
+        if self.hass.config.language.startswith("it"):
+            message = (
+                f"{identity.user_name} ha avviato la ricarica con la tessera "
+                f"{card_name} su {self.settings.cpid}"
+            )
+        else:
+            message = (
+                f"{identity.user_name} started charging with card {card_name} "
+                f"on {self.settings.cpid}"
+            )
+
+        async_log_entry(self.hass, "HA OCPP", message, DOMAIN)
+        event_data: dict[str, Any] = {
+            "charge_point_id": self.id,
+            "cpid": self.settings.cpid,
+            "connector_id": connector_id,
+            "transaction_id": transaction_id,
+            "user_id": identity.user_id,
+            "user_name": identity.user_name,
+            "credential_id": identity.credential_id,
+            "credential_label": identity.credential_label,
+            "credential_display_name": card_name,
+        }
+        self.hass.bus.async_fire(EVENT_TRANSACTION_STARTED, event_data)
 
     def _init_connector_slots(self, conn_id: int) -> None:
         """Ensure connector-scoped metrics exist and carry the right units."""

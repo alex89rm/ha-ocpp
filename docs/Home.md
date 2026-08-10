@@ -1,19 +1,19 @@
-<!-- This is top level document for the github Wiki -->
+# HA OCPP
 
-![OCPP](https://github.com/home-assistant/brands/raw/master/custom_integrations/ocpp/icon.png)
-
-OCPP is a Home Assistant integration for Electric Vehicle chargers that support the Open Charge Point Protocol.
+HA OCPP is a Home Assistant-native OCPP server for charging stations, users,
+RFID credentials, measurements, and charging controls.
 
 The documentation source is maintained in the
 [docs](https://github.com/alex89rm/ha-ocpp/tree/main/docs) folder.
 
-Contents
-========
-<!-- links within the wiki should not use a file extension! -->
-* [Installation](installation)
-* [Supported devices](supported-devices)
-* [User guide](user-guide)
-* [Support](support)
-* [Development](development)
-* [Debugging](debugging)
+## Contents
 
+- [Installation](installation)
+- [User guide](user-guide)
+- [Architecture](architecture)
+- [Wallbox profiles](wallbox-profiles)
+- [Supported devices](supported-devices)
+- [Charging automation](Charge_automation)
+- [Debugging](debugging)
+- [Support](support)
+- [Development](development)

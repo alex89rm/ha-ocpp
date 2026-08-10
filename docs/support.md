@@ -1,56 +1,42 @@
 # Support
-=======
 
-- [General](#general)
-- [FAQ](#faq)
-  - [too many notifications in home assistant](#too-many-notifications-in-home-assistant)
+Use a [GitHub discussion](https://github.com/alex89rm/ha-ocpp/discussions) for
+setup questions and the [issue tracker](https://github.com/alex89rm/ha-ocpp/issues)
+for reproducible bugs. Security reports belong in a private
+[security advisory](https://github.com/alex89rm/ha-ocpp/security/advisories/new).
 
-## General
+Before reporting a problem:
 
-If you need help, start a
-[discussion](https://github.com/alex89rm/ha-ocpp/discussions) or submit an
-[issue](https://github.com/alex89rm/ha-ocpp/issues).
+1. Confirm the installed HA OCPP version and Home Assistant version.
+2. Record the station vendor, exact model, firmware, OCPP version, and connector
+   count.
+3. Reproduce with debug logging from [Debugging](debugging.md).
+4. State whether the Generic profile or a product profile was selected.
+5. Redact RFID values, public addresses, certificates, and other secrets.
 
-## FAQ
+Historical reports from the original `lbbrhzn/ocpp` project can provide useful
+firmware context, but they do not prove that the current HA OCPP code has the
+same behavior. Reproduce against the current HA OCPP release before opening an
+issue here.
 
-### too many notifications in home assistant
+## Charging Profiles
 
-The OCPP sends a notification when the charger is rebooted. This can be due to a bad network connection. The notifications can be managed with automations in home assistant. (see https://github.com/lbbrhzn/ocpp/discussions/938)
+If a station behaves unexpectedly after a maximum-rate change, inspect its
+Smart Charging support and allowed charging-rate units first. To deliberately
+remove profiles, call:
 
-Example:
-
-```
-trigger:
-  - platform: persistent_notification
-    update_type:
-      - added
-    notification_id: ""
-condition:
-  - condition: template
-    value_template: "{{ trigger.notification.title | lower == \"ocpp integration\" }}"
-action:
-  - delay:
-      hours: 0
-      minutes: 10
-      seconds: 0
-      milliseconds: 0
-  - service: persistent_notification.dismiss
-    data:
-      notification_id: "{{ trigger.notification.notification_id }}"
-mode: parallel
-max: 10
+```yaml
+action: ha_ocpp.clear_profile
+data:
+  devid: garage_wallbox
 ```
 
-### unstable behavior when setting the charger maximum current
+Clearing profiles can remove the station-wide safety ceiling as well as
+transaction profiles. Apply the required maximum again after the test.
 
-If your charger is acting strange when you're changing the maximum current, or sending a ha_ocpp.set_charge_rate action, it might help to clear the charging profiles from the charger.
+## Reboot Notifications
 
-Run the following action (from Developer Tools):
-
-```
-    - action: ha_ocpp.clear_profile
-      data:
-        devid: charger
-```
-
-Where <mark>charger</mark> refers to your selected charger device identity.
+HA OCPP can create persistent notifications when a station reboots or reports a
+protocol warning. Repeated reboot notifications usually indicate an unstable
+network, rejected configuration exchange, or station firmware loop. Diagnose
+the cause before suppressing the notification in an automation.

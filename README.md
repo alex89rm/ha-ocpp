@@ -1,4 +1,10 @@
+<p align="center">
+  <img src=".github/assets/ha-ocpp-banner.png" alt="HA OCPP - OCPP server for Home Assistant" width="100%">
+</p>
+
 # HA OCPP
+
+[![Open HA OCPP in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=alex89rm&repository=ha-ocpp&category=integration)
 
 HA OCPP is a Home Assistant-native OCPP server for managing charging stations,
 users, RFID credentials, measurements, and charging limits from one operational
@@ -16,6 +22,7 @@ package.
   protocol quirks.
 - Automatic profile selection from BootNotification vendor and model metadata,
   with an explicit administrator override.
+- One supported central-system listener containing one or more wallboxes.
 - Station-wide persistent current or power limits based on the charging-rate
   units advertised by each OCPP 1.6 charger.
 - Separate current limits for every connector on multi-connector stations.
@@ -26,8 +33,9 @@ phase-voltage noise floor and for persistent station-wide power limits using
 
 ## Installation
 
-1. Add `https://github.com/alex89rm/ha-ocpp` to HACS as a custom integration
-   repository.
+1. Open HA OCPP in HACS with the button above. Until the repository is accepted
+   into the default HACS catalog, add `https://github.com/alex89rm/ha-ocpp` as a
+   custom integration repository first.
 2. Install **HA OCPP** and restart Home Assistant.
 3. Add the HA OCPP integration from **Settings > Devices & services**.
 4. Open **HA OCPP** from the Home Assistant sidebar.
@@ -43,7 +51,8 @@ configure HA OCPP again. Services now use the `ha_ocpp.*` namespace.
 
 ## Architecture
 
-See [Architecture](docs/architecture.md) and
+See the [documentation index](docs/README.md),
+[Architecture](docs/architecture.md), and
 [Wallbox profiles](docs/wallbox-profiles.md). Product-specific assets can be
 added independently of protocol behavior.
 

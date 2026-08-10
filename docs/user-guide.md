@@ -1,218 +1,193 @@
-User guide
-==========
-
-## Installing the OCPP Integration
-
-Follow the steps listed in [README.md](https://github.com/lbbrhzn/ocpp/blob/main/README.md) to get started.  Below are some additional notes which may save you some time.
-
-## Installing HACS (Home Assistant Community Store)
-
-Installation of the HACS integration is a pre-requisite before you can install OCPP.  However, it's worth noting that HACS brings a lot of baggage along with it, which is annoying, but this is the price to pay for using a 3rd party repository installer such as HACS.  Having said that, once it's up and running, HACS stays out of the way unless you need to `Redownload` or `Remove` OCPP.
-
-The 'baggage' referred to above, is every single repository available through HACS.  As you can imagine, this adds up to a huge amount of data being downloaded from the Github servers, and they get upset about it, displaying `Rate Limit` error messages.  You will see these error messages whenever you install HACS, but don't worry, the rate limit will reset after a few hours and HACS will be installed.  It's worth remembering never to remove HACS unless there is no other way to achieve whatever it is you're wanting to do.  Each time you reinstall, you'll be in for a wait of several hours so it's best avoided unless there is no other alternative.
-
-## Configuring the Central System
-
-![Central System Configuration](https://user-images.githubusercontent.com/8673442/129494762-08052152-f057-4563-93b5-5aae810dfbfc.png)
-
-The `Central system identity` shown above with a default of `central` can be anything you like up to a **maximum** of **20 characters**.  Whatever is entered in that field will be used as a device identifier in Home Assistant (HA), so it's probably best to avoid spaces and punctuation symbols, but otherwise, enter anything you like.
-
-The `Charge point identity` shown above with a default of `charger` is a little different.  Whatever you enter in that field will determine the prefix of all Charger entities added to Home Assistant (HA).  My recommendation is that it's best left at the default of charger.  If you put anything else in that field, it will be used as the prefix for all Charger entities added to HA during installation, however, new entities subsequently added in later version releases sometimes revert to the default prefix, regardless of what was entered during installation.  So you end up with a mixture of different prefixes which can be avoided simply by leaving `Charge point identity` set to the default of `charger`.
-
-![OCPP Measurands](https://user-images.githubusercontent.com/8673442/129494804-cdff0dfb-a421-490c-af1e-e939f01455b4.png)
-
-Measurands (according to OCPP terminology) are actually metrics provided by the charger.  Each charger supports a subset of the available metrics and for each one supported, a sensor entity is available in HA.  Some of these sensor entities will give erroneous readings whilst others give no readings at all.  Sensor entities not supported by the charger will show as `Unknown` if you try to create a sensor entity for them.  Below is a table of the metrics I've found useful for the Wallbox Pulsar Plus.  Tables for other chargers will follow as contributions come in from owners of each supported charger.
-
-OCPP integration can automatically detect supported measurands. However, some chargers have faulty firmware that causes the detection mechanism to fail. For such chargers, it is possible to disable automatic measurand detection and manually set the measurands to those supported by the charger. When set manually, selected measurands are not checked for compatibility with the charger and are requested from it. See below for OCPP compliance notes and charger-specific instructions in [supported devices](supported-devices).
-
-For chargers with multiple connectors (outlets), the OCPP integration will create one device per connector, named `charger Connector 1`, `charger Connector 2` etc. All measurands and other entities (buttons, numbers, switches, diagnostics sensors) that are connector-specific per the OCPP standard will be found on these devices.
-
-## Managing authorization and RFID cards
-
-Open the OCPP integration, choose **Configure**, then select **Authorization and RFID cards**. Users and their cards are stored by the integration and can be managed without restarting the OCPP server.
-
-By default, the integration keeps the historical behaviour and accepts unknown credentials. Enable **Allow only registered credentials** in the authorization policy after adding the users and cards that should be allowed to charge.
-
-To add a card, create or select a user, choose **Add RFID card**, select a connected charger, and present the card within 60 seconds. The learning scan is deliberately rejected and cannot start a charge. Confirm the masked card identifier before assigning it. A card can belong to only one user; moving it to another user requires explicit confirmation.
-
-Each charger also exposes a **Learn RFID** configuration button. It opens the same 60-second safe learning window and stores an unknown scan as unassigned. Home Assistant shows a persistent notification, and the card can then be assigned from the authorization settings.
-
-Authorization is evaluated by the central system for OCPP 1.6 and 2.0.1. After a policy, user, or card changes, the integration asks all connected chargers to clear their authorization caches. Charger-side offline authorization settings can still affect what a disconnected charger permits.
-
-## Understanding status
-
-Your charger exposes a connector status sensor:
-* Single-connector: `sensor.<charger_id>_status_connector`
-* Multi-connector: `sensor.<charger_id>_connector_<connector_number>_status_connector`
-
-For OCPP 1.6, the sensor can show these values:
-
-* **Available** – No EV is connected; the connector is free.
-* **Preparing** – EV is connected and/or authenticated but charging hasn’t started yet (handshake, cable lock, internal checks).
-* **Charging** – Energy is being delivered.
-* **SuspendedEV** – The EV has paused energy transfer (e.g., target SoC reached, schedule, thermal limit).
-* **SuspendedEVSE** – The charger has paused energy transfer (e.g., power limit, smart charging profile, grid signal).
-* **Finishing** – Charging has stopped, but the session isn’t fully closed yet (typically waiting for the cable to be unplugged).
-* **Reserved** – The connector is reserved (via ReserveNow); only the intended user/ID may start. This is not supported by the OCPP integration yet.
-* **Unavailable** – Intentionally set out of service (e.g., ChangeAvailability(Inoperative)) or temporarily not usable. (Entities remain available in Home Assistant.)
-* **Faulted** – A fault prevents charging (e.g., ground fault, over-temp, lock error). Check the sensor errorCode for details.
-
-Note
-In OCPP 1.6, `connectorId = 0` (station level) only uses Available, Unavailable, or Faulted.<br>
-OCPP 2.0.1 simplifies connector status to Available / Occupied / Reserved / Unavailable / Faulted and reports charging progress in TransactionEvent instead. The integration normalises both protocols onto the OCPP 1.6 vocabulary listed above, so the status sensor reads the same whichever version a charger negotiates: `Occupied` is reported as **Preparing**, and **Charging** / **SuspendedEV** / **SuspendedEVSE** come from the transaction's charging state. Automations can use the same conditions on either protocol.
-
-If your integration shows extra attributes on the connector status sensor like availability_change or availability_pending, they indicate that a status change (e.g., after ChangeAvailability) has been accepted or scheduled and will take effect once current conditions allow (e.g., after an active session ends).
-
-## Changing availability
-
-* **Availability (charger-level) switch**<br>
-  Sets the entire charger to `Unavailable` (station-level). All idle connectors switch to `Unavailable` immediately. Any connector with an ongoing session is marked as scheduled and will switch to `Unavailable` after the session ends.
-
-* **Availability (per-connector) switches**<br>
-  Set a specific connector to `Unavailable`. If that connector currently has an ongoing session, the change is scheduled and will take effect once the session ends.
-
-* **Charge Control switch**<br>
-  Turning off ends the ongoing charging session (remote stop). The connector typically transitions to `Finishing` and then back to its normal idle state once the cable is unplugged. Turning the switch on again resets the session metrics; the charger returns to its previous state (this does not force a new session to start).
-
-
-
-## Useful Entities for Wallbox Pulsar Plus
-
-### Metrics
-
-* `Energy Active Import Register` or `Energy Session` (they give the same readings)
-* `Power Active Import` (instantaneous charging power)
-* `Current Offered` (maximum charging current available)
-* `Voltage` (single phase models only, doesn't work on 3-phase)
-* `Frequency` (single phase models only, doesn't work on 3-phase)
-* `Time Session` (elapsed time from start of charging session)
-
-### Diagnostics
-
-* `Status Connector` (shows the current state of available/preparing/charging/finishing/suspended etc)
-* `Stop Reason` (reason the charging session was stopped)
-
-### Controls
-
-* `Charge Control`
-* `Availability` (must be set to ON before EV is plugged in)
-* `Maximum Current` (sets maximum charging current available)
-* `Reset`
-
-## Useful Entities for ABB Terra AC
-
-### Metrics
-
-* `Current.Import` (instantaneous current flow to EV)
-* `Energy.Active.Import.Register` (active energy imported from the grid)
-* `Power.Active.Import` (instantaneous active power imported by EV)
-* `Voltage` (instantaneous AC RMS supply voltage)
-
-
-## Useful Entities for EVBox Elvi
-
-### Metrics
-
-* `Current Offered` (maximum charging current available)
-* `Time Session` (elapsed time from start of charging session)
-* `Temperature` (internal charger temperature)
-
-### Diagnostics
-
-* `Status Connector` (shows the current state of available/preparing/charging/finishing/suspended etc)
-* `Stop Reason` (reason the charging session was stopped)
-
-### Controls
-
-* `Charge Control`
-* `Availability` (OFF when something causes a problem or during a reboot etc)
-* `Maximum Current` (sets maximum charging current available)
-* `Reset`
-
-## Useful Entities and Workarounds for United Chargers Grizzl-E
-
-Comments below relate to Grizzl-E firmware version 5.633, tested Oct-Nov 2022.
-
-### Metrics
-The Grizzl-E updates these metrics every 30s during charging sessions:
-* `Current Import` (current flowing into EV)
-* `Power Active Import` (power flowing into EV)
-* `Energy Active Import Register` (cumulative energy supplied to EV during charging session. Resets to zero at start of each session)
-* `Time Session` (elapsed time from start of charging session)
-
-### Diagnostics
-
-* `Status Connector` (current charger state: available/preparing/charging/finishing/suspended etc)
-* `Stop Reason` (reason the charging session was stopped)
-* `Latency Pong` (elapsed time for charger's response to internet ping. Good for diagnosing connectivity issues. Usually less than 1000ms)
-* `Version Firmware` (charger firmware version and build)
-
-### Controls
-
-* `Charge Control` (User switches to ON to start charging session, once charger is in Preparing state. Can be automated in HA - see this [comment in Issue #442](https://github.com/lbbrhzn/ocpp/issues/442#issuecomment-1295865797) for details)
-* `Availability` (ON when charger is idle. OFF during active charging session, or when something causes a problem)
-* `Maximum Current` (sets maximum charging current available. Reverts to value set by charger's internal DIP switch following reboots; tweak slider to reload)
-
-## Useful Entities for Vestel EVC-04 Wallboxes
-
-### Metrics
-
-* `Energy Active Import Register` (cumulative energy supplied to EV during charging session. Resets to zero at start of each session)
-* `Energy Active Import Interval` (in case you need the energy spent in total for the current charging session)
-* `Power Active Import` (instantaneous charging power)
-* `Current Import`
-* `Time Session` (elapsed time from start of charging session)
-
-### Diagnostics
-
-* `Status Connector` (shows the current state of available/preparing/charging/finishing/suspended etc)
-* `Stop Reason` (reason the charging session was stopped)
-
-### Controls
-
-* `Charge Control`
-* `Availability` (must be set to ON before EV is plugged in)
-* `Maximum Current` (sets maximum charging current available)
-* `Reset`
-
-## Useful Entities for Rolec EVO
-
-### Metrics
-
-* `Current Import`
-* `Current Offered` (may be limited by the settings on the charger itself, check the EVO app)
-* `Energy Session` (charge for present/last session - kWh)
-* `Power Active Import` (active charging power - kW)
-* `Temperature` (internal temperature - degrees C)
-* `Time Session` (duration of active/last charging session)
-* `Voltage` (seems to report a little higher than expected)
-
-There are several other metrics too, I'm not sure what they mean, and also `Export` variants of some of the `Import` entities, but they seem to always be zero for me.
-
-### Diagnostics
-
-* `Status Connector` (Available, Preparing, Charging, etc)
-
-There are many other diagnostic entities about the features, ids, model, firmware etc, not sure if they'd be much practical use.
-
-### Controls
-
-* `Availability` (turning off switches the halo from flashing blue to constant red)
-* `Charge Control`
-* `Maximum Current` (if `Current Offered` doesn't reach this when charging, raise the current to the max in the EVO app itself, connect via Bluetooth)
-* `Reset` (reboot the charger)
-* `Unlock` (I think this will unlock the charging cable, if permanent lock is enabled from the app)
-
-## OCPP Compatibility Issues
-
-### ABB Terra AC
-
-ABB Terra AC firmware 1.8.21 and earlier versions fail to respond correctly when OCPP measurands are automatically detected by the OCPP integration. As of this writing, ABB has been notified, but no corresponding firmware fix is available. As a result, users must configure measurands manually. See the suggested ABB Terra AC configuration in [supported devices](supported-devices.md).
-
-### Grizzl-E
-
-Grizzl-E firmware 5.x has a few OCPP-compliance defects, including responding to certain OCPP server messages with invalid JSON. Firmware 3.x.x on chargers such as the Mini Connect and Ultimate does not seem to have these issues. Symptoms of this problem include repeated reboots of the charger. By editing the OCPP server source code, one can avoid these problematic messages and obtain useful charger behaviour. ChargeLabs (the company working on the Grizzl-E firmware) expects to release version 6 of the firmware in early 2023, which may fix these problems.
-
-The workaround consists of:
-- checking the *Skip OCPP schema validation* checkbox during OCPP server configuration
-- commenting-out several lines in `/config/custom_components/ha_ocpp/api.py` and adding a few default values to the OCPP server source code. Details are in this [comment in Issue #442](https://github.com/lbbrhzn/ocpp/issues/442#issuecomment-1237651231)
+# User Guide
+
+Start with [Installation](installation.md), then use the **HA OCPP** sidebar
+panel for day-to-day administration. Standard Home Assistant entities remain
+available for dashboards, scripts, and automations.
+
+## Server and Station Model
+
+Each HA OCPP integration entry owns an OCPP central-system listener. The server
+device contains listener diagnostics and authorization-user sensors. Charging
+stations connected to that listener are separate child devices; a station with
+multiple outlets also has one child device per connector.
+
+Use one central-system entry for the current supported deployment. Although the
+configuration model and panel can represent listeners on different ports, the
+domain-level Home Assistant services are not yet routed safely across multiple
+loaded entries.
+
+The identity in the station's WebSocket path is its OCPP charge-point identity.
+During discovery, HA OCPP also asks for a lowercase Home Assistant identifier
+(`cpid`). This second value is the stable base used by entity IDs and must be
+unique across all HA OCPP entries.
+
+## Management Panel
+
+The sidebar panel has these operational areas:
+
+- **Overview** shows the server state and connected wallboxes.
+- **Wallboxes** shows live status, measurements, connector actions, limits,
+  profile selection, and measurement intervals.
+- **Users and RFID** manages the access policy, users, cards, and enrollment.
+- **Server** changes listener and WebSocket settings.
+
+Panel commands use an administrator-only Home Assistant WebSocket API. Server
+or station setting changes update the owning config entry and reload it when
+Home Assistant applies the entry update. Live controls call the same backend
+objects used by HA entities.
+
+## Measurements and Intervals
+
+HA OCPP creates sensors only from the station configuration and capabilities it
+can discover. Unsupported measurands may remain unknown. Disable automatic
+measurand detection for firmware that incorrectly accepts every proposed value,
+then select only the measurands the station actually implements.
+
+**Meter interval** configures the active transaction sampling interval. **Idle
+interval** configures clock-aligned data and, for OCPP 1.6 stations with
+`RemoteTrigger`, also schedules a `MeterValues` request while no transaction is
+active. A request is also attempted shortly after a transaction stops.
+
+The station is still the source of truth. A station may reject an interval,
+round it, treat the key as read-only, or accept `TriggerMessage` without sending
+fresh measurements. HA OCPP cannot synthesize a voltage reading that the
+station did not report.
+
+Per-phase voltage aggregation ignores values below the active wallbox profile's
+noise floor. The generic floor is 0.5 V; the hardware-verified Autel
+MaxiCharger profile uses 1.0 V so inactive phases reported near zero do not
+reduce the displayed average.
+
+## Charging-Rate Controls
+
+For an OCPP 1.6 station, HA OCPP reads the allowed charging-rate units after
+connection:
+
+- `Current` exposes a station-wide **Maximum Current** entity.
+- `Power` exposes a station-wide **Maximum Power** entity.
+- both advertised units expose both station-wide entities.
+
+These entities send a persistent station-wide `ChargePointMaxProfile` to
+connector `0`. They are suitable as the upper bound used by domestic load
+balancing and apply independently of the current transaction. The displayed
+value is the last value HA OCPP knows the station accepted, restored across an
+HA restart when possible. The current implementation does not use
+`GetCompositeSchedule` and does not read the active profile back from the
+station.
+
+The maximum value of each slider is an administrator-configured safety bound,
+not a discovered electrical rating. OCPP 1.6 reports whether `A` or `W` can be
+used but has no generic nameplate-capacity key. A station returning `Accepted`
+for 13 kW does not prove that a 7.4 kW unit can physically deliver 13 kW. Set
+the configured maximum to the lower of the station, cable, and circuit ratings.
+
+For stations with more than one connector, HA OCPP also creates a separate
+**Maximum Current** entity on every connector child device. Connector controls
+remain connector-scoped and do not remove or widen the station-wide ceiling.
+
+The Autel MaxiCharger AC power path has been physically verified with
+`ChargePointMaxProfile`, `Absolute`, `W`, and connector `0`: changing the value
+altered CP PWM in real time and the limit remained in force for the next
+transaction.
+
+See [Charging Automation](Charge_automation.md) for examples and the distinction
+between station-wide and transaction-specific profiles.
+
+## Connector Status and Actions
+
+For OCPP 1.6, connector status can include:
+
+- **Available**: the connector is free according to the station.
+- **Preparing**: authorization, cable handling, or the EV handshake is in
+  progress.
+- **Charging**: energy is being delivered.
+- **SuspendedEV**: the EV has paused energy transfer.
+- **SuspendedEVSE**: the station has paused energy transfer.
+- **Finishing**: the transaction stopped but the connector has not returned to
+  its idle state.
+- **Reserved**: the connector is reserved.
+- **Unavailable**: it was made inoperative or is temporarily unusable.
+- **Faulted**: a fault prevents operation.
+
+OCPP 2.x separates connector occupancy from transaction charging state. HA OCPP
+normalizes those messages to the common status vocabulary used by its entities
+and panel.
+
+The **Start** action is a remote-start request, not a cable-presence detector.
+On some stations it preauthorizes a future transaction and may be accepted
+while no EV is attached. Only subsequent status messages from the station can
+confirm `Preparing` or `Charging`; HA OCPP must not label a vehicle as connected
+merely because a remote-start command was accepted.
+
+**Stop** requests termination of the active transaction. **Unlock** asks the
+station to release a connector lock; it is useful only for stations with a
+controllable cable lock and may legitimately be rejected on a socket or state
+that cannot be unlocked. **Availability** changes whether the station or one
+connector is operative and may be scheduled until an active transaction ends.
+
+## Users and RFID
+
+HA OCPP stores a user name, enabled state, and zero or more RFID credentials.
+Each credential has its complete token, a user-facing label, enabled state, and
+OCPP authorization status. The label can describe the card, vehicle, or any
+other useful association; it is also used to identify an active session in the
+user sensor.
+
+Unknown credentials are accepted by default for backwards compatibility.
+Enable **Allow only registered credentials** after adding the users and cards
+that should be allowed to charge.
+
+To enroll a card:
+
+1. Select **Read RFID** in the panel or press the station's **Learn RFID**
+   configuration button.
+2. Choose the connected station and start the 60-second enrollment window.
+3. Present the card once.
+4. Assign the captured credential to a user and add an optional label.
+
+The learning scan is deliberately rejected and cannot start charging. A card
+can belong to only one user. Policy and card changes ask connected stations to
+apply the central policy and clear their authorization caches where supported.
+Station-side offline authorization can still affect behavior while disconnected.
+
+The admin panel can show complete RFID values because its WebSocket commands
+require a Home Assistant administrator. The authorization-user sensor attached
+to the server device has state `disabled`, `idle`, or `charging` and exposes
+only masked card identifiers in attributes. Its active-session attributes link
+the user and card label to the charging station, connector, and transaction.
+
+## Wallbox Profiles
+
+Automatic profile selection uses vendor and model information from
+`BootNotification`. A manual profile override is available in station settings.
+Leave it on **Automatic** unless diagnosing incorrect product identification.
+
+A profile supplies bounded metadata and normalization, not a separate OCPP
+implementation. Unsupported products continue through the Generic OCPP
+profile. See [Wallbox Profiles](wallbox-profiles.md) for the extension rules and
+hardware evidence.
+
+## Home Assistant Services
+
+Advanced automations can call services in the `ha_ocpp.*` namespace, including:
+
+- `ha_ocpp.set_charge_rate`
+- `ha_ocpp.clear_profile`
+- `ha_ocpp.trigger_custom_message`
+- `ha_ocpp.configure`
+- `ha_ocpp.get_configuration`
+- `ha_ocpp.data_transfer`
+- `ha_ocpp.update_firmware`
+- `ha_ocpp.get_diagnostics`
+
+Prefer the station and connector entities for ordinary controls. Service calls
+accept a `devid` identifying the target station. A custom charging profile is
+an advanced, protocol-version-specific payload and bypasses the safety and unit
+selection provided by the dedicated number entities.
+
+## Device-Specific Notes
+
+Firmware behavior varies substantially even when a product advertises OCPP
+support. Consult [Supported Devices](supported-devices.md) for reported setup
+requirements and known limitations. A historical report is not equivalent to a
+current hardware-verified HA OCPP profile.

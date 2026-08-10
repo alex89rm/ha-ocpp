@@ -1,23 +1,45 @@
 Supported devices
 =================
 
-All OCPP 1.6j compatible devices should be supported, but not every device offers the same level of functionality. So far, we've tried:
+HA OCPP's generic path targets standards-compliant charging stations, but each
+firmware exposes a different subset of OCPP and some implementations contain
+protocol defects. The entries below combine current HA OCPP testing with
+historical community reports inherited from the original project. A historical
+report is not the same as a hardware-verified HA OCPP profile.
+
+## Autel MaxiCharger AC
+
+The Autel MaxiCharger profile is selected automatically when BootNotification
+reports an `Autel*` vendor and `MaxiCharger*` model.
+
+Verified on physical hardware:
+
+- inactive phase-voltage values around 0.05 V are ignored with a 1.0 V noise
+  floor before phase averaging;
+- an OCPP 1.6 station-wide power limit using `ChargePointMaxProfile`,
+  `Absolute`, `W`, and connector `0` changes CP PWM in real time;
+- the accepted power limit remains active for the next transaction.
+
+The station advertises the `Power` charging-rate unit, so HA OCPP exposes
+**Maximum Power**. Configure its upper bound to the installation rating; the
+station does not provide a portable OCPP nameplate-capacity value.
 
 ## ABB Terra AC chargers
 
-ABB Terra AC chargers with firmware version 1.8.21 and earlier fail to respond correctly when OCPP measurands are automatically detected by the OCPP integration. As of this writing, ABB has been notified, but no corresponding firmware fix is available.
+ABB Terra AC chargers with firmware version 1.8.21 and earlier were reported to fail when HA OCPP automatically detects OCPP measurands. ABB was notified, but this historical report does not identify a corresponding firmware fix.
 
 ### Issue Description
 
-When automatic measurand detection is used in the OCPP integration with ABB Terra AC chargers:
+When automatic measurand detection is used with affected ABB Terra AC chargers:
 
 1. The charger responds as if it supports all proposed measurands.
 2. The integration then asks for all measurands to be reported.
 3. When the integration tries to query which measurands are available after this configuration, the ABB Terra AC reboots.
 
-As a result, the ABB charger becomes unusable with the OCPP integration, as the integration checks for available measurands on every charger boot, leading to a boot loop.
+As a result, the affected charger can enter a boot loop while HA OCPP checks available measurands after each boot.
 
-For more details and symptoms, see [Issue #1275](https://github.com/lbbrhzn/ocpp/issues/1275).
+For the original report and symptoms, see historical upstream
+[Issue #1275](https://github.com/lbbrhzn/ocpp/issues/1275).
 
 ### Workaround
 
@@ -59,7 +81,11 @@ See CTEK Chargestorm Connected 2 below for getting started instructions.
 ## [EN+ Caro Series Home Wallbox](https://www.en-plustech.com/product/caro-series-wallbox/)
 This charger is often white-labelled by other vendors, including [cord](https://www.cord-ev.com/cord-one.html) and [EV Switch](https://www.evswitchstore.com.au/pages/ev-charger-range).
 
-Note the charger's serial number - this is the number that you need to specify for the `Charge point identity` when you configure the OCPP integration in Home Assistant if the OCPP integration does not discover your charger, and also to request a firmware update for versions earlier than 1.0.25.130.
+Note the charger's serial number. This firmware normally appends it to the OCPP
+server URL as the WebSocket path. HA OCPP uses that path as the charge-point
+identity and starts a discovery flow when it first connects. The same serial
+number may be required when requesting a firmware update for versions earlier
+than 1.0.25.130.
 
 For firmware versions earlier than 1.0.25.130 the only way you can update firmware is by connecting to the evchargo OCPP server at `wss://ocpp16.evchargo.com:33033/` and emailing your serial number to `support@en-plus.com.cn` requesting that your firmware is updated.
 
@@ -67,7 +93,10 @@ You will probably want to update your firmware if it is earlier than 1.0.25.130 
 
 Firmware 1.0.25.130 has a firmware update option on the configuration interface (on IP address 192.168.4.1) which you can access by power-cycling the charger and connecting to its access point (see below).
 
-If you have already installed the OCPP integration and have the default `charger` charge point installed, then you will need to re-configure this with the correct charge point identity (by removing and re-adding the OCPP integration) to change from the default `charger` charge point identity before configuring the charger.
+If the discovered path is wrong, correct the URL in the charger and complete the
+new HA OCPP discovery flow. Choose the friendly HA identifier carefully during
+discovery: it remains read-only afterwards so existing entity unique IDs are
+not orphaned.
 
 Connect to the charger's access point (AP) by powering down the charger (i.e. switch off the charger's isolator or circuit breaker) and powering it back on a few seconds later.  The charger's access point becomes available for 15 minutes, and the SSID matches the charger's serial number (starting with SN).  Log in to the configuration interface on the IP address 192.168.4.1.
 
@@ -94,7 +123,7 @@ You may wish to disable sensors that show `Unknown` after you've completed a cha
 
 ## [Etrel - Inch Pro](https://etrel.com/charging-solutions/inch-pro/)
 To allow a custom OCPP server such as HA to set up a transaction ID, it is necessary to set under Users > Charging Authorization the
-authorization type to either `Central system only` or `Charger whitelist and central system` otherwise the OCPP integration won't
+authorization type to either `Central system only` or `Charger whitelist and central system` otherwise HA OCPP may not
 match transactions and it won't report some meter values such as session time.
 
 ## [EVBox Elvi](https://evbox.com/en/ev-chargers/elvi)
@@ -172,7 +201,10 @@ Known issue: In firmware 03.09.0 amperage changes are accepted but not applied. 
 
 Supported OCPP requests for the 3.x.x firmware are documented in a PDF on their site in under https://grizzl-e.com/connect-to-third-party-ocpp-backend/
 
-Other Grizzl-E chargers on the 5.x.x firmware have some defects in OCPP implementation, which can be worked around. See [User Guide](https://github.com/lbbrhzn/ocpp/blob/main/docs/user-guide.md) section in Documentation for details.)
+Other Grizzl-E chargers on 5.x.x firmware have reported OCPP implementation
+defects. Use HA OCPP's **Skip schema validation**, manual measurands, and other
+documented station options where appropriate; do not edit installed source
+files as a configuration method. See the local [User Guide](user-guide.md).
 
 Grizzl-E has now locked OCPP support behind a $200 paywall https://grizzl-e.com/ocpp-access/ (support may [unlock](https://community.home-assistant.io/t/grizzl-e-charger-and-has-ocpp-integration/804698/23) access for devices purchased before Sept 2025).
 
@@ -190,7 +222,9 @@ Note that there are different models with similar model names, some of which sup
 ## Others
 When a charger is not listed as a supported charger it simply means that it has not been reported to work. Whether it will work or not in practice really depends on whether it is compliant with the OCPP standard. Some vendors claim their device is compliant without bothering to do a compliance test, because that takes time and costs money!
 
-When it is fully compliant, then it should work out of the box, since the ocpp integration is designed to work for fully compliant chargers. Any issues should be reported, and we will do out best to analyze them. In some cases modifications or workarounds may be needed. As long as these workarounds do not break compliance to the OCPP standard they can be added to this repository.
-Otherwise, we urge you to request your vendor to update their firmware to make their device OCPP compliant.
-
-You can always make your own fork of this repository to solve issues for a specific device that are not OCPP compliant. However, we will not integrate these type of changes into this repository, because that may prevent other chargers to work.
+A compliant implementation should work through HA OCPP's Generic profile. If a
+station requires a workaround, first keep standards behavior in the generic
+protocol layer. A product-specific difference may be added as a bounded wallbox
+profile with identification, tests, fallback behavior, and hardware evidence;
+it must not change unrelated stations. Firmware defects that cannot be isolated
+safely should be fixed by the station vendor.

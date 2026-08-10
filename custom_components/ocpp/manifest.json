@@ -2,6 +2,7 @@
   "domain": "ocpp",
   "name": "HA OCPP",
   "after_dependencies": [
+    "logbook",
     "persistent_notification"
   ],
   "codeowners": [
@@ -19,5 +20,5 @@
     "ocpp>=2.1.0",
     "websockets>=14.1"
   ],
-  "version": "0.11.0-alpha.4"
+  "version": "0.11.0-alpha.5"
 }

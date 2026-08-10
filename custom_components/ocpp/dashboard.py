@@ -24,7 +24,6 @@ from .api import CentralSystem
 from .authorization import (
     AUTHORIZATION_STATUSES,
     AuthorizationRegistryError,
-    mask_token,
 )
 from .const import (
     CHARGING_RATE_UNIT_CURRENT,
@@ -86,8 +85,6 @@ def _available_connector_actions(status: Any, connected: bool) -> tuple[str, ...
         return ("start", "unlock")
     if normalized == "finishing":
         return ("unlock",)
-    if normalized in {"", "available"}:
-        return ("start",)
     return ()
 
 
@@ -145,8 +142,8 @@ def _number_state(
         return None
 
 
-def _safe_authorization_snapshot(central: CentralSystem) -> dict[str, Any]:
-    """Return users and RFID metadata without exposing complete tokens."""
+def _authorization_snapshot(central: CentralSystem) -> dict[str, Any]:
+    """Return users and RFID metadata for the admin-only dashboard."""
     users = []
     for user_id, user in central.authorization.users.items():
         users.append(
@@ -160,7 +157,7 @@ def _safe_authorization_snapshot(central: CentralSystem) -> dict[str, Any]:
                         "label": credential["label"],
                         "enabled": credential["enabled"],
                         "authorization_status": credential["authorization_status"],
-                        "masked_token": mask_token(credential["token"]),
+                        "token": credential["token"],
                     }
                     for credential in user["credentials"]
                 ],
@@ -172,7 +169,7 @@ def _safe_authorization_snapshot(central: CentralSystem) -> dict[str, Any]:
             "id": item["id"],
             "cp_id": item["cp_id"],
             "created_at": item["created_at"],
-            "masked_token": mask_token(item["token"]),
+            "token": item["token"],
         }
         for item in central.authorization.pending_credentials
     ]
@@ -324,7 +321,7 @@ def dashboard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
                     ),
                 },
                 "wallboxes": wallboxes,
-                "authorization": _safe_authorization_snapshot(central),
+                "authorization": _authorization_snapshot(central),
             }
         )
     return {

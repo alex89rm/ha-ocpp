@@ -9,13 +9,13 @@ from websockets.protocol import State
 
 from ocpp.v16.enums import MessageTrigger
 
-from custom_components.ocpp.const import (
+from custom_components.ha_ocpp.const import (
     DOMAIN,
     CentralSystemSettings,
     ChargerSystemSettings,
 )
-from custom_components.ocpp.enums import Profiles
-from custom_components.ocpp.ocppv16 import ChargePoint
+from custom_components.ha_ocpp.enums import Profiles
+from custom_components.ha_ocpp.ocppv16 import ChargePoint
 
 from .const import CONF_SSL_CERTFILE_PATH, CONF_SSL_KEYFILE_PATH
 
@@ -76,7 +76,7 @@ async def test_post_connect_refreshes_restored_measurements(hass):
     charge_point._request_idle_meter_values = AsyncMock(return_value=True)
 
     with patch(
-        "custom_components.ocpp.ocppv16.cp.post_connect", new=AsyncMock()
+        "custom_components.ha_ocpp.ocppv16.cp.post_connect", new=AsyncMock()
     ) as parent_post_connect:
         await charge_point.post_connect()
 
@@ -114,7 +114,7 @@ async def test_post_transaction_refresh_uses_short_delay(hass):
     charge_point._request_idle_meter_values = AsyncMock(return_value=True)
 
     with patch(
-        "custom_components.ocpp.ocppv16.asyncio.sleep", new=AsyncMock()
+        "custom_components.ha_ocpp.ocppv16.asyncio.sleep", new=AsyncMock()
     ) as sleep:
         await charge_point._request_idle_meter_values_after_stop()
 
@@ -156,7 +156,7 @@ async def test_idle_monitor_uses_configured_interval(hass):
         raise TimeoutError
 
     with patch(
-        "custom_components.ocpp.ocppv16.asyncio.wait_for",
+        "custom_components.ha_ocpp.ocppv16.asyncio.wait_for",
         side_effect=expire_interval,
     ) as wait_for:
         await charge_point.monitor_idle_meter_values()

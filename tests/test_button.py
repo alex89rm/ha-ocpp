@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock
 import pytest
 from homeassistant.exceptions import HomeAssistantError
 
-from custom_components.ocpp.authorization import EnrollmentInProgressError
-from custom_components.ocpp.button import BUTTONS, ChargePointButton
+from custom_components.ha_ocpp.authorization import EnrollmentInProgressError
+from custom_components.ha_ocpp.button import BUTTONS, ChargePointButton
 
 
 def _learn_rfid_description():
@@ -25,7 +25,7 @@ async def test_learn_rfid_button_arms_the_correct_charger():
 
     central.start_rfid_enrollment.assert_awaited_once_with("autel")
     central.set_charger_state.assert_not_awaited()
-    assert button.unique_id == "button.ocpp.autel.learn_rfid"
+    assert button.unique_id == "button.ha_ocpp.autel.learn_rfid"
     assert button.translation_key == "learn_rfid"
 
 

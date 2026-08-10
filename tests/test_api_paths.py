@@ -10,14 +10,14 @@ from homeassistant.const import STATE_OK, STATE_UNAVAILABLE
 from homeassistant.exceptions import HomeAssistantError
 from websockets import NegotiationError
 
-from custom_components.ocpp.api import CentralSystem
-from custom_components.ocpp.const import CHARGING_RATE_UNIT_POWER, DOMAIN
-from custom_components.ocpp.enums import (
+from custom_components.ha_ocpp.api import CentralSystem
+from custom_components.ha_ocpp.const import CHARGING_RATE_UNIT_POWER, DOMAIN
+from custom_components.ha_ocpp.enums import (
     HAChargerServices as csvcs,
     HAChargerStatuses as cstat,
 )
-from custom_components.ocpp.chargepoint import Metric as M
-from custom_components.ocpp.chargepoint import SetVariableResult
+from custom_components.ha_ocpp.chargepoint import Metric as M
+from custom_components.ha_ocpp.chargepoint import SetVariableResult
 
 from tests.const import MOCK_CONFIG_DATA
 
@@ -460,7 +460,7 @@ async def test_pinned_version_overrides_server_preference(hass):
 @pytest.mark.asyncio
 async def test_resolve_subprotocols_auto_and_pinned(hass):
     """Pinning an OCPP version advertises only that version's subprotocol."""
-    from custom_components.ocpp.const import (
+    from custom_components.ha_ocpp.const import (
         CentralSystemSettings,
         DEFAULT_SUBPROTOCOLS,
     )

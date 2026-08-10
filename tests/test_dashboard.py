@@ -14,7 +14,7 @@ from homeassistant.components.number import (
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.helpers import entity_registry as er
 
-from custom_components.ocpp.const import (
+from custom_components.ha_ocpp.const import (
     CHARGING_RATE_UNIT_CURRENT,
     CHARGING_RATE_UNIT_POWER,
     CONF_CHARGING_RATE_UNITS,
@@ -25,15 +25,16 @@ from custom_components.ocpp.const import (
     CONF_MAX_POWER,
     CONF_METER_INTERVAL,
     CONF_NUM_CONNECTORS,
+    DOMAIN,
 )
-from custom_components.ocpp.dashboard import (
+from custom_components.ha_ocpp.dashboard import (
     WALLBOX_COMMAND_SCHEMA,
     _available_connector_actions,
     _authorization_snapshot,
     dashboard_snapshot,
     websocket_wallbox_command,
 )
-from custom_components.ocpp.wallbox_profiles import WallboxIdentity, select_profile
+from custom_components.ha_ocpp.wallbox_profiles import WallboxIdentity, select_profile
 import pytest
 import voluptuous as vol
 
@@ -104,13 +105,13 @@ def test_wallbox_command_schema_rejects_negative_connector():
         (
             CHARGING_RATE_UNIT_POWER,
             0,
-            "number.ocpp.autel.maximum_power",
+            "number.ha_ocpp.autel.maximum_power",
             "autel_maximum_power",
         ),
         (
             CHARGING_RATE_UNIT_CURRENT,
             2,
-            "number.ocpp.autel.conn2.maximum_current",
+            "number.ha_ocpp.autel.conn2.maximum_current",
             "autel_connector_2_maximum_current",
         ),
     ],
@@ -127,7 +128,7 @@ async def test_dashboard_limit_uses_canonical_number_entity(
     registry = er.async_get(hass)
     registry_entry = registry.async_get_or_create(
         NUMBER_DOMAIN,
-        "ocpp",
+        DOMAIN,
         unique_id,
         suggested_object_id=suggested_object_id,
     )
@@ -138,7 +139,7 @@ async def test_dashboard_limit_uses_canonical_number_entity(
 
     hass.services.async_register(NUMBER_DOMAIN, SERVICE_SET_VALUE, set_value)
     monkeypatch.setattr(
-        "custom_components.ocpp.dashboard._central_by_entry",
+        "custom_components.ha_ocpp.dashboard._central_by_entry",
         lambda _hass, _entry_id: object(),
     )
     connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
@@ -237,7 +238,7 @@ def test_dashboard_snapshot_exposes_profile_and_each_connector(hass, monkeypatch
         get_ha_unit=lambda *_args, **_kwargs: "V",
     )
     monkeypatch.setattr(
-        "custom_components.ocpp.dashboard._central_systems", lambda _hass: [central]
+        "custom_components.ha_ocpp.dashboard._central_systems", lambda _hass: [central]
     )
 
     snapshot = dashboard_snapshot(hass)

@@ -8,9 +8,9 @@ from homeassistant.core import HomeAssistant, ServiceResponse
 from homeassistant.exceptions import HomeAssistantError
 from ocpp.v16.enums import Measurand
 
-from custom_components.ocpp.const import CONF_CPIDS, CONF_CPID, DOMAIN
-from custom_components.ocpp import CentralSystem
-from custom_components.ocpp.enums import (
+from custom_components.ha_ocpp.const import CONF_CPIDS, CONF_CPID, DOMAIN
+from custom_components.ha_ocpp import CentralSystem
+from custom_components.ha_ocpp.enums import (
     HAChargerDetails as cdet,
     HAChargerServices as csvcs,
     HAChargerSession as csess,
@@ -27,7 +27,7 @@ from .charge_point_test import (
     wait_ready,
 )
 from .const import MOCK_CONFIG_DATA, MOCK_CONFIG_DATA_3, MOCK_CONFIG_CP_APPEND
-from custom_components.ocpp.const import (
+from custom_components.ha_ocpp.const import (
     CONF_MONITORED_VARIABLES,
     DEFAULT_METER_INTERVAL,
     DOMAIN as OCPP_DOMAIN,

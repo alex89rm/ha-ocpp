@@ -32,8 +32,14 @@ phase-voltage noise floor and for persistent station-wide power limits using
 3. Add the HA OCPP integration from **Settings > Devices & services**.
 4. Open **HA OCPP** from the Home Assistant sidebar.
 
-The integration domain remains `ocpp` so existing configuration entries,
-entities, services, and automations can migrate without being recreated.
+The integration uses the independent `ha_ocpp` Home Assistant domain. The
+Python `ocpp` package remains the standards implementation used by the server.
+
+### Upgrading from 0.11.x
+
+Versions through `0.11.x` used the `ocpp` Home Assistant domain. Remove that
+integration and its HACS installation, restart Home Assistant, then install and
+configure HA OCPP again. Services now use the `ha_ocpp.*` namespace.
 
 ## Architecture
 

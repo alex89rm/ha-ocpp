@@ -13,20 +13,20 @@ from ocpp.v201.enums import (
 )
 from websockets.protocol import State
 
-from custom_components.ocpp import CONFIG_SCHEMA
-from custom_components.ocpp.authorization import (
+from custom_components.ha_ocpp import CONFIG_SCHEMA
+from custom_components.ha_ocpp.authorization import (
     AuthorizationManager,
     CredentialAlreadyAssignedError,
     DuplicateUserNameError,
     mask_token,
 )
-from custom_components.ocpp.const import (
+from custom_components.ha_ocpp.const import (
     CONFIG,
     DOMAIN,
     CentralSystemSettings,
     ChargerSystemSettings,
 )
-from custom_components.ocpp.ocppv201 import ChargePoint as ChargePoint201
+from custom_components.ha_ocpp.ocppv201 import ChargePoint as ChargePoint201
 
 from .const import MOCK_CONFIG_CS
 

@@ -21,17 +21,17 @@ from ocpp.v201.enums import ChargingStateEnumType, ConnectorStatusEnumType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from websockets.protocol import State
 
-from custom_components.ocpp.const import (
+from custom_components.ha_ocpp.const import (
     DOMAIN,
     CentralSystemSettings,
     ChargerSystemSettings,
 )
-from custom_components.ocpp.enums import (
+from custom_components.ha_ocpp.enums import (
     HAChargerSession as csess,
     HAChargerStatuses as cstat,
 )
-from custom_components.ocpp.ocppv201 import ChargePoint, InventoryReport
-from custom_components.ocpp.switch import SWITCHES
+from custom_components.ha_ocpp.ocppv201 import ChargePoint, InventoryReport
+from custom_components.ha_ocpp.switch import SWITCHES
 
 from .const import CONF_SSL_CERTFILE_PATH, CONF_SSL_KEYFILE_PATH
 

@@ -215,4 +215,4 @@ Grizzl-E firmware 5.x has a few OCPP-compliance defects, including responding to
 
 The workaround consists of:
 - checking the *Skip OCPP schema validation* checkbox during OCPP server configuration
-- commenting-out several lines in `/config/custom_components/ocpp/api.py` and adding a few default values to the OCPP server source code. Details are in this [comment in Issue #442](https://github.com/lbbrhzn/ocpp/issues/442#issuecomment-1237651231)
+- commenting-out several lines in `/config/custom_components/ha_ocpp/api.py` and adding a few default values to the OCPP server source code. Details are in this [comment in Issue #442](https://github.com/lbbrhzn/ocpp/issues/442#issuecomment-1237651231)

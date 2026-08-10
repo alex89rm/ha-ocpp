@@ -19,8 +19,8 @@ from types import SimpleNamespace
 import pytest
 from homeassistant.exceptions import HomeAssistantError
 
-from custom_components.ocpp.const import DOMAIN
-from custom_components.ocpp.number import NUMBERS, ChargePointNumber
+from custom_components.ha_ocpp.const import DOMAIN
+from custom_components.ha_ocpp.number import NUMBERS, ChargePointNumber
 
 
 def _mk_number(hass, result=None, error=None, on_write=None, confirmed=32.0):

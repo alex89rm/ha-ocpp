@@ -230,7 +230,7 @@ class ChargePointNumber(RestoreNumber, NumberEntity):
         # the previous one (the charger keeps its profile across our
         # restarts). None on a fresh install, so a rollback cannot invent
         # a limit. Requests the charger performs without this entity - the
-        # ocpp.clear_profile / ocpp.set_charge_rate services - are not
+        # ha_ocpp.clear_profile / ha_ocpp.set_charge_rate services - are not
         # reflected here, the same blind spot the pre-#2049 code had.
         self._confirmed_value: float | None = None
         # Monotonic ticket per request, and the ticket of the newest

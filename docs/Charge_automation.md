@@ -33,7 +33,7 @@ Essentially, the slider in your GUI maintains control over the absolute maximum 
 
 To dynamically set the session-specific charge current within an automation, use the following action code snippet:
 
-    - action: ocpp.set_charge_rate
+    - action: ha_ocpp.set_charge_rate
       data:
         custom_profile: |
           {

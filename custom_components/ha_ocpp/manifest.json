@@ -1,5 +1,5 @@
 {
-  "domain": "ocpp",
+  "domain": "ha_ocpp",
   "name": "HA OCPP",
   "after_dependencies": [
     "persistent_notification"
@@ -19,5 +19,5 @@
     "ocpp>=2.1.0",
     "websockets>=14.1"
   ],
-  "version": "0.11.0-alpha.7"
+  "version": "0.12.0-alpha.1"
 }

@@ -136,7 +136,7 @@ All basic functions work properly
 These are a discontinued (but cheap) 7kw 1PH smart charger, with an OCPP implementation that's seemingly quite close to standard, and tolerent.
 Mine works well with the plugin, OCPP setup is done through the local AP-Wifi. The admin panel password is admin.
 A few plugin tweaks to get full functionality...
-   - Force SMART mode, to allow setting charge rates (use action ocpp.set_charge_rate) and retreiving meter values (use action ocpp.trigger_custom_message)
+   - Force SMART mode, to allow setting charge rates (use action ha_ocpp.set_charge_rate) and retreiving meter values (use action ha_ocpp.trigger_custom_message)
    - Manually specify the Measurands
       - Voltage
       - Temperature
@@ -144,7 +144,7 @@ A few plugin tweaks to get full functionality...
       - Current.Import
       - Power.Active.Import
       - Energy.Active.Import.Register
-   - Create an automation triggering action: ocpp.trigger_custom_message with requested_message set to MeterValues on a schedule of your choice to retrieve the Measurands.
+   - Create an automation triggering action: ha_ocpp.trigger_custom_message with requested_message set to MeterValues on a schedule of your choice to retrieve the Measurands.
    - Optionally create an automation updating the hearbeat interval (you have to set a value different to the one in the chargepoint) when the chargepoint reboots.
    - I haven't tested using secure mode.
    - If you have problems with charging profiles, check your firmware version is 1.6.3 (the latest in Mar 2025)

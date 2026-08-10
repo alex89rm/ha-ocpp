@@ -9,9 +9,9 @@ import websockets
 from websockets.protocol import State
 
 
-from custom_components.ocpp.chargepoint import ChargePoint as BaseCP, MeasurandValue
-from custom_components.ocpp.ocppv16 import ChargePoint as CPv16
-from custom_components.ocpp.const import DEFAULT_MEASURAND
+from custom_components.ha_ocpp.chargepoint import ChargePoint as BaseCP, MeasurandValue
+from custom_components.ha_ocpp.ocppv16 import ChargePoint as CPv16
+from custom_components.ha_ocpp.const import DEFAULT_MEASURAND
 from unittest.mock import MagicMock, AsyncMock
 from ocpp.v16.enums import Measurand, Phase
 
@@ -91,7 +91,7 @@ async def test_handle_call_notimplemented_sends_call_error(
             srv = cs.charge_points[cp_id]
 
             # Patch the exact base alias used by the subclass, and raise the *OCPP* NotImplementedError.
-            import custom_components.ocpp.chargepoint as cp_mod
+            import custom_components.ha_ocpp.chargepoint as cp_mod
             from ocpp.exceptions import NotImplementedError as OcppNotImplementedError
 
             async def boom(self, msg):
@@ -219,7 +219,7 @@ async def test_update_returns_early_when_root_device_missing(
             srv = cs.charge_points[cp_id]
 
             # Fake registries: no device returned.
-            import custom_components.ocpp.chargepoint as mod
+            import custom_components.ha_ocpp.chargepoint as mod
 
             class FakeDR:
                 """Fake DR."""
@@ -304,7 +304,7 @@ async def test_update_traverses_children_and_skips_visited(
 
             # Build a tiny fake device graph:
             # root -> child (twice in the values() list to create a duplicate push)
-            import custom_components.ocpp.chargepoint as mod
+            import custom_components.ha_ocpp.chargepoint as mod
 
             class Dev:
                 """Fake Dev."""
@@ -580,7 +580,10 @@ async def test_session_and_lifetime_eair_distinction(hass):
 @pytest.mark.asyncio
 async def test_process_phases_neutral_shield():
     """Test that isolated Neutral (N) phases do not overwrite main sensors with 0.0."""
-    from custom_components.ocpp.chargepoint import ChargePoint as BaseCP, MeasurandValue
+    from custom_components.ha_ocpp.chargepoint import (
+        ChargePoint as BaseCP,
+        MeasurandValue,
+    )
     from unittest.mock import MagicMock
 
     # 1. Setup Mock ChargePoint

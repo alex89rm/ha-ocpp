@@ -7,8 +7,8 @@ from collections.abc import AsyncGenerator
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ocpp import CentralSystem
-from custom_components.ocpp.const import (
+from custom_components.ha_ocpp import CentralSystem
+from custom_components.ha_ocpp.const import (
     CONF_CHARGING_RATE_UNITS,
     CONF_CPID,
     CONF_CPIDS,
@@ -51,7 +51,7 @@ async def test_setup_unload_and_reload_entry(
 
     # Set up the entry and assert that the values set during setup are where we expect
     # them to be. Because we have patched the ocppDataUpdateCoordinator.async_get_data
-    # call, no code from custom_components/ocpp/api.py actually runs.
+    # call, no code from custom_components/ha_ocpp/api.py actually runs.
     assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
     assert DOMAIN in hass.data
@@ -87,7 +87,7 @@ async def test_setup_unload_and_reload_entry_multiple_connectors(
 
     # Set up the entry and assert that the values set during setup are where we expect
     # them to be. Because we have patched the ocppDataUpdateCoordinator.async_get_data
-    # call, no code from custom_components/ocpp/api.py actually runs.
+    # call, no code from custom_components/ha_ocpp/api.py actually runs.
     assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
     assert DOMAIN in hass.data
@@ -129,7 +129,7 @@ async def test_migration_entry(
 
     # Set up the entry and assert that the values set during setup are where we expect
     # them to be. Because we have patched the ocppDataUpdateCoordinator.async_get_data
-    # call, no code from custom_components/ocpp/api.py actually runs.
+    # call, no code from custom_components/ha_ocpp/api.py actually runs.
     assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
     assert DOMAIN in hass.data

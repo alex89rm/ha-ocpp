@@ -8,7 +8,7 @@ need to update your Home Assistant `configuration.yaml` file:
 logger:
   default: info
   logs:
-    custom_components.ocpp: debug
+    custom_components.ha_ocpp: debug
 ```
 See [Home Assistant Logger](https://www.home-assistant.io/integrations/logger/)  for more info.
 
@@ -26,26 +26,26 @@ You can filter for OCPP related messages by typing 'ocpp' in the 'search logs' b
 A typical log for a working connection should look like this:
 
 ```text
-2022-03-16 16:33:08 INFO (MainThread) [custom_components.ocpp] {'host': '0.0.0.0', 'port': 9000, 'csid': 'central', 'cpid': 'pulsar', 'meter_interval': 60, 'idle_interval': 900, 'websocket_close_timeout': 10, 'WEBSOCKET_PING_TRIES': 2, 'websocket_ping_interval': 20, 'websocket_ping_timeout': 20, 'skip_schema_validation': False, 'monitored_variables': 'Energy.Active.Import.Register,Energy.Reactive.Import.Register,Energy.Active.Import.Interval,Energy.Reactive.Import.Interval,Power.Active.Import,Power.Reactive.Import,Power.Offered,Power.Factor,Current.Import,Current.Offered,Voltage,Frequency,RPM,SoC,Temperature,Current.Export,Energy.Active.Export.Register,Energy.Reactive.Export.Register,Energy.Active.Export.Interval,Energy.Reactive.Export.Interval,Power.Active.Export,Power.Reactive.Export'}
-2022-03-16 16:35:40 INFO (MainThread) [custom_components.ocpp] Websocket Subprotocol matched: ocpp1.6
-2022-03-16 16:35:40 INFO (MainThread) [custom_components.ocpp] Charger websocket path=/pulsar
-2022-03-16 16:35:40 INFO (MainThread) [custom_components.ocpp] Charger pulsar connected to 0.0.0.0:9000.
-2022-03-16 16:35:40 DEBUG (MainThread) [custom_components.ocpp] Received boot notification for pulsar: {'charge_point_serial_number': '88034', 'charge_point_vendor': 'Wall Box Chargers', 'meter_type': 'Internal NON compliant', 'meter_serial_number': '', 'charge_point_model': 'PLP1-0-2-4', 'iccid': '', 'charge_box_serial_number': '88034', 'firmware_version': '5.5.10', 'imsi': ''}
-2022-03-16 16:35:40 DEBUG (MainThread) [custom_components.ocpp] Updating device info pulsar: {'charge_point_serial_number': '88034', 'charge_point_vendor': 'Wall Box Chargers', 'meter_type': 'Internal NON compliant', 'meter_serial_number': '', 'charge_point_model': 'PLP1-0-2-4', 'iccid': '', 'charge_box_serial_number': '88034', 'firmware_version': '5.5.10', 'imsi': ''}
-2022-03-16 16:35:42 INFO (MainThread) [custom_components.ocpp] Supported feature profiles: Core,FirmwareManagement,LocalAuthListManagement,SmartCharging,RemoteTrigger
-2022-03-16 16:35:42 INFO (MainThread) [custom_components.ocpp] Supported feature profiles: Core,FirmwareManagement,LocalAuthListManagement,SmartCharging,RemoteTrigger
-2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ocpp] Get Configuration for NumberOfConnectors: 1
-2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ocpp] Get Configuration for NumberOfConnectors: 1
-2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ocpp] Get Configuration for HeartbeatInterval: 3600
-2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ocpp] Get Configuration for HeartbeatInterval: 3600
-2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ocpp] 'pulsar' post connection setup completed successfully
-2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ocpp] trigger status notification for connector=0
-2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ocpp] 'pulsar' post connection setup completed successfully
-2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ocpp] trigger status notification for connector=0
-2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ocpp] trigger status notification for connector=1
-2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ocpp] trigger status notification for connector=1
-2022-03-16 16:36:00 DEBUG (MainThread) [custom_components.ocpp] Connection latency from 'central' to 'pulsar': ping=2.0 ms, pong=13.0 ms
-2022-03-16 16:36:20 DEBUG (MainThread) [custom_components.ocpp] Connection latency from 'central' to 'pulsar': ping=2.0 ms, pong=9.0 ms
+2022-03-16 16:33:08 INFO (MainThread) [custom_components.ha_ocpp] {'host': '0.0.0.0', 'port': 9000, 'csid': 'central', 'cpid': 'pulsar', 'meter_interval': 60, 'idle_interval': 900, 'websocket_close_timeout': 10, 'WEBSOCKET_PING_TRIES': 2, 'websocket_ping_interval': 20, 'websocket_ping_timeout': 20, 'skip_schema_validation': False, 'monitored_variables': 'Energy.Active.Import.Register,Energy.Reactive.Import.Register,Energy.Active.Import.Interval,Energy.Reactive.Import.Interval,Power.Active.Import,Power.Reactive.Import,Power.Offered,Power.Factor,Current.Import,Current.Offered,Voltage,Frequency,RPM,SoC,Temperature,Current.Export,Energy.Active.Export.Register,Energy.Reactive.Export.Register,Energy.Active.Export.Interval,Energy.Reactive.Export.Interval,Power.Active.Export,Power.Reactive.Export'}
+2022-03-16 16:35:40 INFO (MainThread) [custom_components.ha_ocpp] Websocket Subprotocol matched: ocpp1.6
+2022-03-16 16:35:40 INFO (MainThread) [custom_components.ha_ocpp] Charger websocket path=/pulsar
+2022-03-16 16:35:40 INFO (MainThread) [custom_components.ha_ocpp] Charger pulsar connected to 0.0.0.0:9000.
+2022-03-16 16:35:40 DEBUG (MainThread) [custom_components.ha_ocpp] Received boot notification for pulsar: {'charge_point_serial_number': '88034', 'charge_point_vendor': 'Wall Box Chargers', 'meter_type': 'Internal NON compliant', 'meter_serial_number': '', 'charge_point_model': 'PLP1-0-2-4', 'iccid': '', 'charge_box_serial_number': '88034', 'firmware_version': '5.5.10', 'imsi': ''}
+2022-03-16 16:35:40 DEBUG (MainThread) [custom_components.ha_ocpp] Updating device info pulsar: {'charge_point_serial_number': '88034', 'charge_point_vendor': 'Wall Box Chargers', 'meter_type': 'Internal NON compliant', 'meter_serial_number': '', 'charge_point_model': 'PLP1-0-2-4', 'iccid': '', 'charge_box_serial_number': '88034', 'firmware_version': '5.5.10', 'imsi': ''}
+2022-03-16 16:35:42 INFO (MainThread) [custom_components.ha_ocpp] Supported feature profiles: Core,FirmwareManagement,LocalAuthListManagement,SmartCharging,RemoteTrigger
+2022-03-16 16:35:42 INFO (MainThread) [custom_components.ha_ocpp] Supported feature profiles: Core,FirmwareManagement,LocalAuthListManagement,SmartCharging,RemoteTrigger
+2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ha_ocpp] Get Configuration for NumberOfConnectors: 1
+2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ha_ocpp] Get Configuration for NumberOfConnectors: 1
+2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ha_ocpp] Get Configuration for HeartbeatInterval: 3600
+2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ha_ocpp] Get Configuration for HeartbeatInterval: 3600
+2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ha_ocpp] 'pulsar' post connection setup completed successfully
+2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ha_ocpp] trigger status notification for connector=0
+2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ha_ocpp] 'pulsar' post connection setup completed successfully
+2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ha_ocpp] trigger status notification for connector=0
+2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ha_ocpp] trigger status notification for connector=1
+2022-03-16 16:35:42 DEBUG (MainThread) [custom_components.ha_ocpp] trigger status notification for connector=1
+2022-03-16 16:36:00 DEBUG (MainThread) [custom_components.ha_ocpp] Connection latency from 'central' to 'pulsar': ping=2.0 ms, pong=13.0 ms
+2022-03-16 16:36:20 DEBUG (MainThread) [custom_components.ha_ocpp] Connection latency from 'central' to 'pulsar': ping=2.0 ms, pong=9.0 ms
 ```
 
 To debug issues with establishing the ocpp connection, you can enable debug logging for websockets.server:

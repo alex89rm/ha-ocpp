@@ -6,16 +6,16 @@ from datetime import datetime, UTC
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ocpp.const import (
+from custom_components.ha_ocpp.const import (
     CONF_CPID,
     CONF_CPIDS,
     CONF_MONITORED_VARIABLES,
     CONF_NUM_CONNECTORS,
 )
-from custom_components.ocpp.const import (
+from custom_components.ha_ocpp.const import (
     DOMAIN as OCPP_DOMAIN,
 )
-from custom_components.ocpp.enums import (
+from custom_components.ha_ocpp.enums import (
     HAChargerServices as csvcs,
 )
 import ocpp

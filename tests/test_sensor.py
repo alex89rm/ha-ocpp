@@ -15,13 +15,13 @@ from homeassistant.components.sensor.const import (
     ATTR_STATE_CLASS,
 )
 
-from custom_components.ocpp.const import (
+from custom_components.ha_ocpp.const import (
     CONF_CSID,
     CONF_NUM_CONNECTORS,
     DATA_UPDATED,
     DOMAIN as OCPP_DOMAIN,
 )
-from custom_components.ocpp.enums import HAChargerSession, HAChargerStatuses
+from custom_components.ha_ocpp.enums import HAChargerSession, HAChargerStatuses
 
 from .const import (
     MOCK_CONFIG_DATA,

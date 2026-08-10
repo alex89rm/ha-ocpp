@@ -10,6 +10,12 @@ from typing import Any
 
 from homeassistant.components import panel_custom, websocket_api
 from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.number import (
+    ATTR_VALUE,
+    DOMAIN as NUMBER_DOMAIN,
+    SERVICE_SET_VALUE,
+)
+from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry, entity_registry
 from homeassistant.helpers.dispatcher import (
@@ -118,6 +124,30 @@ def _metric(
     }
 
 
+def _number_entity_id(
+    hass: HomeAssistant,
+    cpid: str,
+    key: str,
+    connector_id: int | None = None,
+) -> str | None:
+    """Resolve a number entity through its stable unique id."""
+    unique_parts = ["number", DOMAIN, cpid, key]
+    if connector_id is not None:
+        unique_parts.insert(3, f"conn{connector_id}")
+    registry = entity_registry.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        NUMBER_DOMAIN, DOMAIN, ".".join(unique_parts)
+    )
+    if entity_id is not None:
+        return entity_id
+
+    fallback = f"{cpid}_{key}"
+    if connector_id is not None:
+        fallback = f"{cpid}_connector_{connector_id}_{key}"
+    entity_id = f"{NUMBER_DOMAIN}.{slugify(fallback)}"
+    return entity_id if hass.states.get(entity_id) is not None else None
+
+
 def _number_state(
     hass: HomeAssistant,
     cpid: str,
@@ -125,16 +155,9 @@ def _number_state(
     connector_id: int | None = None,
 ) -> float | None:
     """Return a number entity state through its stable unique id."""
-    unique_parts = ["number", DOMAIN, cpid, key]
-    if connector_id is not None:
-        unique_parts.insert(3, f"conn{connector_id}")
-    registry = entity_registry.async_get(hass)
-    entity_id = registry.async_get_entity_id("number", DOMAIN, ".".join(unique_parts))
+    entity_id = _number_entity_id(hass, cpid, key, connector_id)
     if entity_id is None:
-        fallback = f"{cpid}_{key}"
-        if connector_id is not None:
-            fallback = f"{cpid}_connector_{connector_id}_{key}"
-        entity_id = f"number.{slugify(fallback)}"
+        return None
     state = hass.states.get(entity_id)
     if state is None or state.state in {"unknown", "unavailable"}:
         return None
@@ -408,16 +431,28 @@ async def websocket_wallbox_command(
         if action == "set_limit":
             if "value" not in msg or "unit" not in msg:
                 raise ValueError("value and unit are required")
-            if connector_id > 0:
-                if msg["unit"] != CHARGING_RATE_UNIT_CURRENT:
-                    raise ValueError("Connector limits currently use amperes")
-                result = await central.set_max_charge_rate_amps(
-                    msg["cpid"], msg["value"], connector_id=connector_id
-                )
-            else:
-                result = await central.set_max_charge_rate(
-                    msg["cpid"], msg["value"], msg["unit"]
-                )
+            if connector_id > 0 and msg["unit"] != CHARGING_RATE_UNIT_CURRENT:
+                raise ValueError("Connector limits currently use amperes")
+            key = (
+                "maximum_power"
+                if msg["unit"] == CHARGING_RATE_UNIT_POWER
+                else "maximum_current"
+            )
+            entity_id = _number_entity_id(
+                hass,
+                msg["cpid"],
+                key,
+                connector_id if connector_id > 0 else None,
+            )
+            if entity_id is None:
+                raise ValueError("Maximum charge-rate entity is not available")
+            await hass.services.async_call(
+                NUMBER_DOMAIN,
+                SERVICE_SET_VALUE,
+                {ATTR_ENTITY_ID: entity_id, ATTR_VALUE: msg["value"]},
+                blocking=True,
+            )
+            result = True
         else:
             service = {
                 "start": csvcs.service_charge_start.name,

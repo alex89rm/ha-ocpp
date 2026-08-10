@@ -46,8 +46,8 @@
                 "description": "If you need help with the configuration have a look [here]({docs_url})",
                 "data": {
                     "cpid": "Charge point identity",
-                    "max_current": "Maximum charging current",
-                    "max_power": "Maximum charging power",
+                    "max_current": "Wallbox rated maximum current",
+                    "max_power": "Wallbox rated maximum power",
                     "wallbox_profile": "Wallbox profile",
                     "meter_interval": "Charging sample interval (seconds)",
                     "monitored_variables_autoconfig": "Automatic detection of OCPP Measurands",
@@ -307,8 +307,8 @@
                 "title": "OCPP Charger Configuration",
                 "description": "Editing charge point {cp_id}. Its charge point identity (cpid: {cpid}) is fixed, because entity IDs derive from it.",
                 "data": {
-                    "max_current": "Maximum charging current",
-                    "max_power": "Maximum charging power",
+                    "max_current": "Wallbox rated maximum current",
+                    "max_power": "Wallbox rated maximum power",
                     "wallbox_profile": "Wallbox profile",
                     "meter_interval": "Charging sample interval (seconds)",
                     "monitored_variables_autoconfig": "Automatic detection of OCPP Measurands",

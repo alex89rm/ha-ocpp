@@ -1,8 +1,18 @@
 """Tests for the HA OCPP management dashboard API."""
 
+import inspect
 import json
 
 from types import SimpleNamespace
+from unittest.mock import Mock
+
+from homeassistant.components.number import (
+    ATTR_VALUE,
+    DOMAIN as NUMBER_DOMAIN,
+    SERVICE_SET_VALUE,
+)
+from homeassistant.const import ATTR_ENTITY_ID
+from homeassistant.helpers import entity_registry as er
 
 from custom_components.ocpp.const import (
     CHARGING_RATE_UNIT_CURRENT,
@@ -21,6 +31,7 @@ from custom_components.ocpp.dashboard import (
     _available_connector_actions,
     _authorization_snapshot,
     dashboard_snapshot,
+    websocket_wallbox_command,
 )
 from custom_components.ocpp.wallbox_profiles import WallboxIdentity, select_profile
 import pytest
@@ -85,6 +96,73 @@ def test_wallbox_command_schema_rejects_negative_connector():
                 "connector_id": -1,
             }
         )
+
+
+@pytest.mark.parametrize(
+    ("unit", "connector_id", "unique_id", "suggested_object_id"),
+    [
+        (
+            CHARGING_RATE_UNIT_POWER,
+            0,
+            "number.ocpp.autel.maximum_power",
+            "autel_maximum_power",
+        ),
+        (
+            CHARGING_RATE_UNIT_CURRENT,
+            2,
+            "number.ocpp.autel.conn2.maximum_current",
+            "autel_connector_2_maximum_current",
+        ),
+    ],
+)
+async def test_dashboard_limit_uses_canonical_number_entity(
+    hass,
+    monkeypatch,
+    unit,
+    connector_id,
+    unique_id,
+    suggested_object_id,
+):
+    """Dashboard limits share the entity's persistence and validation path."""
+    registry = er.async_get(hass)
+    registry_entry = registry.async_get_or_create(
+        NUMBER_DOMAIN,
+        "ocpp",
+        unique_id,
+        suggested_object_id=suggested_object_id,
+    )
+    service_calls = []
+
+    async def set_value(call):
+        service_calls.append(call.data)
+
+    hass.services.async_register(NUMBER_DOMAIN, SERVICE_SET_VALUE, set_value)
+    monkeypatch.setattr(
+        "custom_components.ocpp.dashboard._central_by_entry",
+        lambda _hass, _entry_id: object(),
+    )
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    handler = inspect.unwrap(websocket_wallbox_command)
+
+    await handler(
+        hass,
+        connection,
+        {
+            "id": 1,
+            "entry_id": "entry-1",
+            "cpid": "autel",
+            "action": "set_limit",
+            "value": 7000.0,
+            "unit": unit,
+            "connector_id": connector_id,
+        },
+    )
+
+    assert service_calls == [
+        {ATTR_ENTITY_ID: registry_entry.entity_id, ATTR_VALUE: 7000.0}
+    ]
+    connection.send_error.assert_not_called()
+    connection.send_result.assert_called_once_with(1, {"success": True})
 
 
 @pytest.mark.parametrize(
@@ -171,6 +249,8 @@ def test_dashboard_snapshot_exposes_profile_and_each_connector(hass, monkeypatch
         "/ha_ocpp_static/assets/autel-maxicharger-ac.png"
     )
     assert wallbox["supported_rate_units"] == ["Current", "Power"]
+    assert wallbox["limits"]["configured_maximum_current"] == 32
+    assert wallbox["limits"]["configured_maximum_power"] == 22000
     assert [connector["id"] for connector in wallbox["connectors"]] == [1, 2]
     assert [connector["actions"] for connector in wallbox["connectors"]] == [
         ["stop"],

@@ -48,6 +48,8 @@ const TEXT = {
     settings: "Impostazioni",
     meterInterval: "Aggiornamento in carica",
     idleInterval: "Aggiornamento a riposo",
+    ratedCurrent: "Corrente nominale wallbox",
+    ratedPower: "Potenza nominale wallbox",
     seconds: "secondi",
     save: "Salva",
     accessPolicy: "Politica di accesso",
@@ -144,6 +146,8 @@ const TEXT = {
     settings: "Settings",
     meterInterval: "Charging update interval",
     idleInterval: "Idle update interval",
+    ratedCurrent: "Wallbox rated current",
+    ratedPower: "Wallbox rated power",
     seconds: "seconds",
     save: "Save",
     accessPolicy: "Access policy",
@@ -557,6 +561,8 @@ class HaOcppPanel extends HTMLElement {
           <form class="wallbox-settings-form" data-entry-id="${this._escape(entryId)}" data-cp-id="${this._escape(wallbox.cp_id)}">
             <label><span>${t.meterInterval} (${t.seconds})</span><input type="number" min="1" name="meter_interval" value="${this._escape(wallbox.settings.meter_interval ?? 60)}"></label>
             <label><span>${t.idleInterval} (${t.seconds})</span><input type="number" min="1" name="idle_interval" value="${this._escape(wallbox.settings.idle_interval ?? 900)}"></label>
+            ${wallbox.supported_rate_units.includes("Current") ? `<label><span>${t.ratedCurrent} (A)</span><input type="number" min="1" step="1" name="max_current" value="${this._escape(wallbox.limits.configured_maximum_current ?? 32)}" required></label>` : ""}
+            ${wallbox.supported_rate_units.includes("Power") ? `<label><span>${t.ratedPower} (W)</span><input type="number" min="1" step="10" name="max_power" value="${this._escape(wallbox.limits.configured_maximum_power ?? 22000)}" required></label>` : ""}
             <button class="secondary" type="submit"><ha-icon icon="mdi:content-save-outline"></ha-icon>${t.save}</button>
           </form>
         </div>
@@ -788,7 +794,10 @@ class HaOcppPanel extends HTMLElement {
       form.addEventListener("submit", (event) => {
         event.preventDefault();
         const data = new FormData(form);
-        this._command({ type: "ha_ocpp/wallbox/settings", entry_id: form.dataset.entryId, cp_id: form.dataset.cpId, meter_interval: Number(data.get("meter_interval")), idle_interval: Number(data.get("idle_interval")) });
+        const command = { type: "ha_ocpp/wallbox/settings", entry_id: form.dataset.entryId, cp_id: form.dataset.cpId, meter_interval: Number(data.get("meter_interval")), idle_interval: Number(data.get("idle_interval")) };
+        if (data.has("max_current")) command.max_current = Number(data.get("max_current"));
+        if (data.has("max_power")) command.max_power = Number(data.get("max_power"));
+        this._command(command);
       });
     });
     root.querySelector("#registered-only")?.addEventListener("change", (event) => this._command({ type: "ha_ocpp/authorization/command", entry_id: this._entryId, action: "set_policy", registered_only: event.target.checked }));

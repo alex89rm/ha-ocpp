@@ -43,6 +43,7 @@ from .const import (
     CONF_WEBSOCKET_PING_TIMEOUT,
     CONF_WALLBOX_PROFILE,
     CONFIG,
+    CONFIG_ENTRY_TITLE,
     DEFAULT_CPID,
     DEFAULT_IDLE_INTERVAL,
     DEFAULT_MAX_CURRENT,
@@ -67,6 +68,8 @@ from .const import (
     DEFAULT_WALLBOX_PROFILE,
     DOMAIN,
     PLATFORMS,
+    SERVER_DEVICE_MODEL,
+    SERVER_DEVICE_NAME,
 )
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
@@ -129,12 +132,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     dr = device_registry.async_get(hass)
 
-    # Create Central System device
+    # Create the server device that owns diagnostics and user entities.
     dr.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, central_sys.id)},
-        name=f"OCPP Central System ({central_sys.id})",
-        model="OCPP Central System",
+        name=SERVER_DEVICE_NAME,
+        manufacturer="HA OCPP",
+        model=SERVER_DEVICE_MODEL,
     )
 
     # Create charger devices
@@ -257,6 +261,14 @@ async def async_migrate_entry(hass, config_entry: ConfigEntry):
                 version=2,
                 minor_version=3,
             )
+
+    if config_entry.version == 2 and config_entry.minor_version < 4:
+        hass.config_entries.async_update_entry(
+            config_entry,
+            title=CONFIG_ENTRY_TITLE,
+            version=2,
+            minor_version=4,
+        )
 
     _LOGGER.info(
         "Migration to configuration version %s.%s successful",

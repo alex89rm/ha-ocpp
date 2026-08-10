@@ -95,7 +95,6 @@ const TEXT = {
     updated: "Modifica applicata",
     error: "Operazione non riuscita",
     connectedStations: "Wallbox connesse",
-    allServers: "Tutti i server",
   },
   en: {
     overview: "Overview",
@@ -193,7 +192,6 @@ const TEXT = {
     updated: "Change applied",
     error: "Operation failed",
     connectedStations: "Connected wallboxes",
-    allServers: "All servers",
   },
 };
 
@@ -206,7 +204,6 @@ class HaOcppPanel extends HTMLElement {
     this._loading = false;
     this._busy = false;
     this._error = "";
-    this._entryId = "";
     this._modal = null;
     this._expandedUserId = "";
     this._editingUserId = "";
@@ -272,10 +269,6 @@ class HaOcppPanel extends HTMLElement {
     if (!silent) this._render();
     try {
       this._snapshot = await this._hass.callWS({ type: "ha_ocpp/dashboard" });
-      const entries = this._snapshot.entries || [];
-      if (!entries.some((item) => item.entry_id === this._entryId)) {
-        this._entryId = entries[0]?.entry_id || "";
-      }
       this._error = "";
     } catch (error) {
       this._error = error?.message || String(error);
@@ -321,15 +314,11 @@ class HaOcppPanel extends HTMLElement {
   }
 
   _entry() {
-    return (this._snapshot?.entries || []).find(
-      (item) => item.entry_id === this._entryId,
-    );
+    return this._snapshot?.entry || null;
   }
 
-  _allWallboxes() {
-    return (this._snapshot?.entries || []).flatMap((entry) =>
-      entry.wallboxes.map((wallbox) => ({ ...wallbox, serverName: entry.name })),
-    );
+  _wallboxes() {
+    return this._entry()?.wallboxes || [];
   }
 
   _metric(metric, digits = 1) {
@@ -346,7 +335,6 @@ class HaOcppPanel extends HTMLElement {
   _render() {
     if (!this.shadowRoot) return;
     const t = this._t;
-    const entries = this._snapshot?.entries || [];
     const body = this._error
       ? `<div class="state-message error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><span>${this._escape(this._error)}</span><button class="primary" data-action="retry">${t.retry}</button></div>`
       : !this._snapshot
@@ -358,11 +346,6 @@ class HaOcppPanel extends HTMLElement {
       <div class="app ${this._busy ? "busy" : ""}">
         <header>
           <div class="brand"><ha-icon icon="mdi:ev-station"></ha-icon><span>HA OCPP</span></div>
-          ${
-            entries.length > 1
-              ? `<label class="server-picker"><span class="sr-only">${t.server}</span><select id="entry-select"><option value="">${t.allServers}</option>${entries.map((entry) => `<option value="${this._escape(entry.entry_id)}" ${entry.entry_id === this._entryId ? "selected" : ""}>${this._escape(entry.name)}</option>`).join("")}</select></label>`
-              : ""
-          }
         </header>
         <nav aria-label="HA OCPP">
           ${this._navItem("overview", "mdi:view-dashboard-outline", t.overview)}
@@ -389,16 +372,10 @@ class HaOcppPanel extends HTMLElement {
 
   _renderOverview() {
     const t = this._t;
-    const entries = this._snapshot.entries || [];
-    const wallboxes = this._allWallboxes();
-    const users = entries.reduce(
-      (total, entry) => total + entry.authorization.users.length,
-      0,
-    );
-    const pending = entries.reduce(
-      (total, entry) => total + entry.authorization.pending_credentials.length,
-      0,
-    );
+    const entry = this._entry();
+    const wallboxes = this._wallboxes();
+    const users = entry?.authorization.users.length || 0;
+    const pending = entry?.authorization.pending_credentials.length || 0;
     const connected = wallboxes.filter((item) => item.connected).length;
     return `
       <section class="page-heading"><div><h1>${t.overview}</h1><p>HA OCPP</p></div></section>
@@ -510,9 +487,7 @@ class HaOcppPanel extends HTMLElement {
 
   _renderWallboxes() {
     const t = this._t;
-    const wallboxes = this._entryId
-      ? this._entry()?.wallboxes || []
-      : this._allWallboxes();
+    const wallboxes = this._wallboxes();
     return `
       <section class="page-heading"><div><h1>${t.wallboxes}</h1></div></section>
       <section class="wallbox-grid">
@@ -710,14 +685,14 @@ class HaOcppPanel extends HTMLElement {
 
   _renderServers() {
     const t = this._t;
-    const entries = this._entryId ? [this._entry()].filter(Boolean) : this._snapshot.entries;
-    return `<section class="page-heading"><div><h1>${t.server}</h1><p>${entries.length}</p></div></section><section class="server-list">${entries.map((entry) => this._serverForm(entry)).join("")}</section>`;
+    const entry = this._entry();
+    return `<section class="page-heading"><div><h1>${t.server}</h1></div></section><section class="server-list">${entry ? this._serverForm(entry) : `<div class="empty">${t.server}</div>`}</section>`;
   }
 
   _serverForm(entry) {
     const t = this._t;
     const server = entry.server;
-    return `<article class="server-block"><div class="server-head"><div><ha-icon icon="mdi:server-network"></ha-icon><div><h2>${this._escape(entry.name)}</h2><span>${this._escape(server.id)}</span></div></div><span class="status ${server.running ? "online" : "offline"}"><i></i>${server.running ? t.running : t.stopped}</span></div>
+    return `<article class="server-block"><div class="server-head"><div><ha-icon icon="mdi:server-network"></ha-icon><div><h2>${this._escape(entry.name)}</h2></div></div><span class="status ${server.running ? "online" : "offline"}"><i></i>${server.running ? t.running : t.stopped}</span></div>
       <form class="server-form" data-entry-id="${this._escape(entry.entry_id)}">
         <label><span>${t.host}</span><input name="host" value="${this._escape(server.host)}" required></label>
         <label><span>${t.port}</span><input name="port" type="number" min="1" max="65535" value="${server.port}" required></label>
@@ -756,13 +731,6 @@ class HaOcppPanel extends HTMLElement {
         this._render();
       });
     });
-    root.querySelector("#entry-select")?.addEventListener("change", (event) => {
-      this._entryId = event.target.value;
-      this._expandedUserId = "";
-      this._editingUserId = "";
-      this._editingCredentialId = "";
-      this._render();
-    });
     root.querySelector('[data-action="retry"]')?.addEventListener("click", () => this._load());
     root.querySelectorAll("[data-open-wallbox]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -800,16 +768,16 @@ class HaOcppPanel extends HTMLElement {
         this._command(command);
       });
     });
-    root.querySelector("#registered-only")?.addEventListener("change", (event) => this._command({ type: "ha_ocpp/authorization/command", entry_id: this._entryId, action: "set_policy", registered_only: event.target.checked }));
+    root.querySelector("#registered-only")?.addEventListener("change", (event) => this._command({ type: "ha_ocpp/authorization/command", entry_id: this._entry()?.entry_id, action: "set_policy", registered_only: event.target.checked }));
     root.querySelector('[data-action="open-add-user"]')?.addEventListener("click", () => { this._modal = { type: "add-user" }; this._render(); });
     root.querySelector('[data-action="open-enrollment"]')?.addEventListener("click", () => { this._modal = { type: "enrollment" }; this._render(); });
     root.querySelectorAll('[data-action="close-modal"]').forEach((button) => button.addEventListener("click", () => { this._modal = null; this._render(); }));
     root.querySelector(".modal-backdrop")?.addEventListener("click", (event) => { if (event.target.classList.contains("modal-backdrop")) { this._modal = null; this._render(); } });
     root.querySelector("#add-user-form")?.addEventListener("submit", (event) => {
-      event.preventDefault(); const data = new FormData(event.target); this._modal = null; this._command({ type: "ha_ocpp/authorization/command", entry_id: this._entryId, action: "add_user", name: data.get("name"), enabled: data.get("enabled") === "on" });
+      event.preventDefault(); const data = new FormData(event.target); this._modal = null; this._command({ type: "ha_ocpp/authorization/command", entry_id: this._entry()?.entry_id, action: "add_user", name: data.get("name"), enabled: data.get("enabled") === "on" });
     });
     root.querySelector("#enrollment-form")?.addEventListener("submit", (event) => {
-      event.preventDefault(); const data = new FormData(event.target); this._modal = null; this._command({ type: "ha_ocpp/authorization/command", entry_id: this._entryId, action: "start_enrollment", cpid: data.get("cpid") });
+      event.preventDefault(); const data = new FormData(event.target); this._modal = null; this._command({ type: "ha_ocpp/authorization/command", entry_id: this._entry()?.entry_id, action: "start_enrollment", cpid: data.get("cpid") });
     });
     root.querySelectorAll(".assign-pending").forEach((button) => button.addEventListener("click", () => { this._modal = { type: "assign", entryId: button.dataset.entryId, pendingId: button.dataset.pendingId }; this._render(); }));
     root.querySelector("#assign-form")?.addEventListener("submit", (event) => {
@@ -871,7 +839,6 @@ class HaOcppPanel extends HTMLElement {
       header { height:64px; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:0 28px; color:#fff; background:#17242b; border-bottom:3px solid var(--primary-color, #03a9f4); }
       .brand { display:flex; align-items:center; gap:12px; font-size:20px; font-weight:700; }
       .brand ha-icon { color:#4dd0e1; }
-      .server-picker select { min-width:180px; color:#fff; background:#263940; border-color:#52656c; }
       nav { position:sticky; top:0; z-index:4; height:52px; display:flex; align-items:stretch; gap:4px; padding:0 24px; background:var(--card-background-color, #fff); border-bottom:1px solid var(--divider-color, #ddd); }
       .nav-item { min-width:120px; display:flex; align-items:center; justify-content:center; gap:8px; padding:0 14px; color:var(--secondary-text-color); background:transparent; border:0; border-bottom:3px solid transparent; }
       .nav-item.selected { color:var(--primary-color, #0288d1); border-bottom-color:var(--primary-color, #0288d1); font-weight:600; }
@@ -1096,7 +1063,6 @@ class HaOcppPanel extends HTMLElement {
         .credential-form { grid-template-columns:1fr; }
         .credential-form .editor-actions, .credential-form .danger-zone { grid-column:1; }
         .server-form { grid-template-columns:1fr; padding:14px; }
-        .server-picker select { min-width:130px; max-width:45vw; }
         .icon-action { min-width:42px; width:42px; padding:0; }
         .icon-action span { display:none; }
       }

@@ -238,11 +238,11 @@ def test_dashboard_snapshot_exposes_profile_and_each_connector(hass, monkeypatch
         get_ha_unit=lambda *_args, **_kwargs: "V",
     )
     monkeypatch.setattr(
-        "custom_components.ha_ocpp.dashboard._central_systems", lambda _hass: [central]
+        "custom_components.ha_ocpp.dashboard._central_system", lambda _hass: central
     )
 
     snapshot = dashboard_snapshot(hass)
-    wallbox = snapshot["entries"][0]["wallboxes"][0]
+    wallbox = snapshot["entry"]["wallboxes"][0]
 
     assert wallbox["profile"]["id"] == "autel.maxicharger"
     assert wallbox["profile"]["hardware_verified"] is True

@@ -9,7 +9,7 @@ import re
 import ssl
 
 from functools import partial
-from homeassistant.config_entries import ConfigEntry, SOURCE_INTEGRATION_DISCOVERY
+from homeassistant.config_entries import ConfigEntry, SOURCE_RECONFIGURE
 from homeassistant.const import STATE_OK, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant, ServiceResponse, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
@@ -340,7 +340,10 @@ class CentralSystem:
                     info = {"cp_id": cp_id, "entry": self.entry}
                     await self.hass.config_entries.flow.async_init(
                         DOMAIN,
-                        context={"source": SOURCE_INTEGRATION_DISCOVERY},
+                        context={
+                            "source": SOURCE_RECONFIGURE,
+                            "entry_id": self.entry.entry_id,
+                        },
                         data=info,
                     )
                     # use return to wait for config entry to reload after discovery

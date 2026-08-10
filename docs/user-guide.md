@@ -6,20 +6,16 @@ available for dashboards, scripts, and automations.
 
 ## Server and Station Model
 
-Each HA OCPP integration entry owns an OCPP central-system listener. The server
-device contains listener diagnostics and authorization-user sensors. Charging
-stations connected to that listener are separate child devices; a station with
-multiple outlets also has one child device per connector.
-
-Use one central-system entry for the current supported deployment. Although the
-configuration model and panel can represent listeners on different ports, the
-domain-level Home Assistant services are not yet routed safely across multiple
-loaded entries.
+The single HA OCPP integration entry owns the OCPP server listener. The **HA
+OCPP Server** device contains listener diagnostics and authorization-user
+sensors. Charging stations connected to that listener are separate child
+devices; a station with multiple outlets also has one child device per
+connector.
 
 The identity in the station's WebSocket path is its OCPP charge-point identity.
 During discovery, HA OCPP also asks for a lowercase Home Assistant identifier
 (`cpid`). This second value is the stable base used by entity IDs and must be
-unique across all HA OCPP entries.
+unique across the server.
 
 ## Management Panel
 

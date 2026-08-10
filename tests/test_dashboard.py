@@ -90,7 +90,7 @@ def test_wallbox_command_schema_rejects_negative_connector():
 @pytest.mark.parametrize(
     ("status", "connected", "actions"),
     [
-        ("Available", True, ()),
+        ("Available", True, ("start",)),
         ("Preparing", True, ("start", "unlock")),
         ("Charging", True, ("stop",)),
         ("SuspendedEV", True, ("stop",)),

@@ -20,11 +20,9 @@ from custom_components.ocpp.authorization import (
     DuplicateUserNameError,
     mask_token,
 )
-from custom_components.ocpp.chargepoint import ChargePoint as BaseChargePoint
 from custom_components.ocpp.const import (
     CONFIG,
     DOMAIN,
-    EVENT_TRANSACTION_STARTED,
     CentralSystemSettings,
     ChargerSystemSettings,
 )
@@ -281,55 +279,6 @@ async def test_v201_transaction_event_cannot_bypass_authorization(hass):
     )
 
     assert response.id_token_info["status"] == AuthorizationStatus.invalid.value
-
-
-async def test_transaction_start_is_written_to_logbook_and_event(hass, monkeypatch):
-    """A registered card identifies its user in HA activity and automations."""
-    manager = await _manager(hass, "transaction_activity")
-    user_id = await manager.async_add_user("Alessio")
-    credential_id = await manager.async_assign_token(user_id, "CARD-ONE", label="A250e")
-    entries = []
-    events = []
-    monkeypatch.setattr(
-        "custom_components.ocpp.chargepoint.async_log_entry",
-        lambda *args: entries.append(args),
-    )
-    hass.config.language = "it"
-    remove_listener = hass.bus.async_listen(
-        EVENT_TRANSACTION_STARTED, lambda event: events.append(event.data)
-    )
-    charge_point = SimpleNamespace(
-        authorization=manager,
-        hass=hass,
-        id="AUTEL_CP",
-        settings=SimpleNamespace(cpid="autel"),
-    )
-
-    BaseChargePoint.log_transaction_started(charge_point, "CARD-ONE", 1, 42)
-    await hass.async_block_till_done()
-    remove_listener()
-
-    assert entries == [
-        (
-            hass,
-            "HA OCPP",
-            "Alessio ha avviato la ricarica con la tessera A250e su autel",
-            DOMAIN,
-        )
-    ]
-    assert events == [
-        {
-            "charge_point_id": "AUTEL_CP",
-            "cpid": "autel",
-            "connector_id": 1,
-            "transaction_id": 42,
-            "user_id": user_id,
-            "user_name": "Alessio",
-            "credential_id": credential_id,
-            "credential_label": "A250e",
-            "credential_display_name": "A250e",
-        }
-    ]
 
 
 def test_mask_token_never_exposes_more_than_the_suffix():

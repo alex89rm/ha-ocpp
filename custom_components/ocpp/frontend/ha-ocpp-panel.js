@@ -33,7 +33,7 @@ const TEXT = {
     stop: "Ferma",
     unlock: "Sblocca connettore",
     available: "Disponibile",
-    preparing: "Veicolo collegato",
+    preparing: "In preparazione",
     charging: "In carica",
     suspendedEv: "Sospesa dal veicolo",
     suspendedEvse: "Sospesa dalla wallbox",
@@ -129,7 +129,7 @@ const TEXT = {
     stop: "Stop",
     unlock: "Unlock connector",
     available: "Available",
-    preparing: "Vehicle connected",
+    preparing: "Preparing",
     charging: "Charging",
     suspendedEv: "Paused by vehicle",
     suspendedEvse: "Paused by wallbox",
@@ -510,7 +510,7 @@ class HaOcppPanel extends HTMLElement {
       ? this._entry()?.wallboxes || []
       : this._allWallboxes();
     return `
-      <section class="page-heading"><div><h1>${t.wallboxes}</h1><p>${wallboxes.length}</p></div></section>
+      <section class="page-heading"><div><h1>${t.wallboxes}</h1></div></section>
       <section class="wallbox-grid">
         ${wallboxes.length ? wallboxes.map((item) => this._wallboxCard(item)).join("") : `<div class="empty">${t.noWallboxes}</div>`}
       </section>`;
@@ -532,7 +532,7 @@ class HaOcppPanel extends HTMLElement {
         ${this._stateBadge(state)}
       </div>
       <div class="identity-grid">
-        <div><span>${t.profile}</span><strong>${this._escape(wallbox.profile.name)}</strong>${wallbox.profile.hardware_verified ? `<small class="verified"><ha-icon icon="mdi:check-decagram"></ha-icon>${t.verified}</small>` : ""}</div>
+        <div><span>${t.profile}</span><strong>${this._escape(wallbox.profile.name)}</strong>${wallbox.profile.hardware_verified ? `<small class="verified"><span class="verified-mark"><ha-icon icon="mdi:check-decagram"></ha-icon></span><span>${t.verified}</span></small>` : ""}</div>
         <div><span>${t.firmware}</span><strong>${this._escape(identity.firmware_version || "-")}</strong></div>
         <div><span>${t.protocol}</span><strong>${this._escape(wallbox.protocol || "-")}</strong></div>
         <div><span>${t.status}</span><strong>${this._escape(state.label)}</strong></div>
@@ -919,8 +919,9 @@ class HaOcppPanel extends HTMLElement {
       .identity-grid > div { min-width:0; display:flex; flex-direction:column; gap:4px; }
       .identity-grid span { color:var(--secondary-text-color); font-size:11px; text-transform:uppercase; }
       .identity-grid strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
-      .verified { display:flex; align-items:center; gap:3px; color:#217a4b; font-size:10px; }
-      .verified ha-icon { width:13px; height:13px; }
+      .verified { min-width:0; display:grid; grid-template-columns:16px minmax(0, 1fr); align-items:start; gap:5px; margin-top:2px; color:#217a4b; font-size:10px; line-height:16px; }
+      .verified-mark { width:16px; height:16px; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+      .verified ha-icon { width:16px; height:16px; min-width:16px; --mdc-icon-size:16px; }
       .control-band { padding:16px 18px; border-bottom:1px solid var(--divider-color, #ddd); }
       .control-band .section-title { margin-bottom:6px; }
       .limit-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:18px; }

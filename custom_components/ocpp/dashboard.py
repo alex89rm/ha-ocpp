@@ -85,6 +85,8 @@ def _available_connector_actions(status: Any, connected: bool) -> tuple[str, ...
         return ("start", "unlock")
     if normalized == "finishing":
         return ("unlock",)
+    if normalized in {"", "available"}:
+        return ("start",)
     return ()
 
 

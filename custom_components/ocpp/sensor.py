@@ -20,10 +20,12 @@ from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.util import slugify
 
 from .api import CentralSystem
+from .authorization import mask_token
 from .const import (
     CONF_CPID,
     CONF_CPIDS,
     CONF_NUM_CONNECTORS,
+    DASHBOARD_UPDATED,
     DATA_UPDATED,
     DEFAULT_CLASS_UNITS_HA,
     DEFAULT_NUM_CONNECTORS,
@@ -108,10 +110,159 @@ class CentralSystemStatus(SensorEntity):
         self.async_on_remove(async_dispatcher_connect(self.hass, DATA_UPDATED, _update))
 
 
+class AuthorizationUserStatus(SensorEntity):
+    """Charging and authorization state for one registered user."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_has_entity_name = True
+    _attr_options = ["idle", "charging", "disabled"]
+    _attr_should_poll = False
+    _attr_translation_key = "authorization_user_status"
+
+    def __init__(self, central_system: CentralSystem, user_id: str) -> None:
+        """Initialize a registered-user status sensor."""
+        self.central_system = central_system
+        self.user_id = user_id
+        user = central_system.authorization.users[user_id]
+        self._attr_name = user["name"]
+        self._attr_unique_id = (
+            f"{DOMAIN}.{central_system.entry.entry_id}.authorization_user."
+            f"{user_id}.sensor"
+        )
+        object_id = slugify(f"{central_system.id}_user_{user['name']}")
+        self.entity_id = f"{SENSOR_DOMAIN}.{object_id}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, central_system.id)},
+        )
+
+    def _user(self) -> dict[str, object] | None:
+        """Return the current user record."""
+        return self.central_system.authorization.users.get(self.user_id)
+
+    def _identity_for_reported_tag(self, reported_tag: object):
+        """Resolve both OCPP 1.6 tags and OCPP 2.x type-prefixed tokens."""
+        value = str(reported_tag or "")
+        if not value:
+            return None
+        candidates = [value]
+        if ":" in value:
+            candidates.append(value.split(":", 1)[1])
+        for candidate in candidates:
+            identity = self.central_system.authorization.identity_for_token(candidate)
+            if identity is not None:
+                return identity
+        return None
+
+    def _active_sessions(self) -> list[dict[str, object]]:
+        """Return active OCPP transactions belonging to this user."""
+        sessions = []
+        for charge_point in self.central_system.charge_points.values():
+            cpid = charge_point.settings.cpid
+            connector_count = max(1, int(charge_point.num_connectors or 1))
+            for connector_id in range(1, connector_count + 1):
+                transaction_id = self.central_system.get_metric(
+                    cpid,
+                    HAChargerSession.transaction_id.value,
+                    connector_id=connector_id,
+                )
+                if transaction_id in (None, "", 0, "0"):
+                    continue
+                reported_tag = self.central_system.get_metric(
+                    cpid,
+                    HAChargerStatuses.id_tag.value,
+                    connector_id=connector_id,
+                )
+                identity = self._identity_for_reported_tag(reported_tag)
+                if identity is None or identity.user_id != self.user_id:
+                    continue
+                token = str(reported_tag).split(":", 1)[-1]
+                card_name = identity.credential_label or mask_token(token)
+                sessions.append(
+                    {
+                        "charge_point": cpid,
+                        "connector_id": connector_id,
+                        "transaction_id": transaction_id,
+                        "card": card_name,
+                    }
+                )
+        return sessions
+
+    @property
+    def available(self) -> bool:
+        """Return whether the authorization user still exists."""
+        return self._user() is not None
+
+    @property
+    def native_value(self) -> str | None:
+        """Return disabled, charging, or idle."""
+        user = self._user()
+        if user is None:
+            return None
+        if not user["enabled"]:
+            return "disabled"
+        return "charging" if self._active_sessions() else "idle"
+
+    @property
+    def icon(self) -> str:
+        """Return an icon matching the user's current state."""
+        if self.native_value == "charging":
+            return "mdi:account-bolt"
+        if self.native_value == "disabled":
+            return "mdi:account-off-outline"
+        return "mdi:account-outline"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        """Expose cards and active charging sessions without leaking RFID codes."""
+        user = self._user()
+        if user is None:
+            return {}
+        cards = [
+            {
+                "name": credential["label"] or mask_token(credential["token"]),
+                "identifier": mask_token(credential["token"]),
+                "enabled": credential["enabled"],
+                "authorization_status": credential["authorization_status"],
+            }
+            for credential in user["credentials"]
+        ]
+        return {
+            "user_id": self.user_id,
+            "enabled": user["enabled"],
+            "card_count": len(cards),
+            "cards": cards,
+            "active_sessions": self._active_sessions(),
+        }
+
+    async def async_added_to_hass(self) -> None:
+        """Refresh on authorization and OCPP transaction changes."""
+        await super().async_added_to_hass()
+
+        @callback
+        def _update(*_args) -> None:
+            user = self._user()
+            if user is None:
+                entity_registry = er.async_get(self.hass)
+                if entity_registry.async_get(self.entity_id) is not None:
+                    entity_registry.async_remove(self.entity_id)
+                return
+            self._attr_name = user["name"]
+            self.async_write_ha_state()
+
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, DASHBOARD_UPDATED, _update)
+        )
+        self.async_on_remove(async_dispatcher_connect(self.hass, DATA_UPDATED, _update))
+
+
 async def async_setup_entry(hass, entry, async_add_devices):
     """Configure the sensor platform."""
     central_system = hass.data[DOMAIN][entry.entry_id]
     entities: list[SensorEntity] = [CentralSystemStatus(central_system)]
+    known_user_ids = set(central_system.authorization.users)
+    entities.extend(
+        AuthorizationUserStatus(central_system, user_id) for user_id in known_user_ids
+    )
     ent_reg = er.async_get(hass)
 
     # setup all chargers added to config
@@ -246,6 +397,26 @@ async def async_setup_entry(hass, entry, async_add_devices):
                 )
 
     async_add_devices(entities, False)
+
+    @callback
+    def _add_authorization_users(*_args) -> None:
+        current_user_ids = set(central_system.authorization.users)
+        known_user_ids.intersection_update(current_user_ids)
+        new_user_ids = current_user_ids - known_user_ids
+        if not new_user_ids:
+            return
+        known_user_ids.update(new_user_ids)
+        async_add_devices(
+            [
+                AuthorizationUserStatus(central_system, user_id)
+                for user_id in new_user_ids
+            ],
+            False,
+        )
+
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, DASHBOARD_UPDATED, _add_authorization_users)
+    )
 
 
 class ChargePointMetric(RestoreSensor, SensorEntity):

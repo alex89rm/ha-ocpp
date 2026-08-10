@@ -1373,7 +1373,6 @@ class ChargePoint(cp):
                 id_tag_info={om.status.value: AuthorizationStatus.accepted.value},
                 transaction_id=tx_id,
             )
-            self.log_transaction_started(id_tag, connector_id, tx_id)
         else:
             result = call_result.StartTransaction(
                 id_tag_info={om.status.value: auth_status},

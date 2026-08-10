@@ -1372,12 +1372,6 @@ class ChargePoint(cp):
             self._metrics[
                 (global_idx, csess.session_time.value)
             ].unit = UnitOfTime.MINUTES
-            if (
-                id_token
-                and response.id_token_info["status"]
-                == AuthorizationStatusEnumType.accepted.value
-            ):
-                self.log_transaction_started(token, global_idx, tx_id)
         else:
             if self._tx_start_time.get(global_idx):
                 elapsed = (t - self._tx_start_time[global_idx]).total_seconds()

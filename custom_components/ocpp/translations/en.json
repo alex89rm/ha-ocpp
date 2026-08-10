@@ -122,6 +122,16 @@
             "learn_rfid": {
                 "name": "Learn RFID"
             }
+        },
+        "sensor": {
+            "authorization_user_status": {
+                "name": "User status",
+                "state": {
+                    "idle": "Idle",
+                    "charging": "Charging",
+                    "disabled": "Disabled"
+                }
+            }
         }
     },
     "options": {

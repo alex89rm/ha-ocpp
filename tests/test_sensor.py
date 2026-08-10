@@ -1,10 +1,14 @@
 """Test sensor for ocpp integration."""
 
 import asyncio
+from types import SimpleNamespace
+
 import websockets
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant.const import ATTR_DEVICE_CLASS
+from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.components.sensor.const import (
     SensorDeviceClass,
     SensorStateClass,
@@ -14,8 +18,10 @@ from homeassistant.components.sensor.const import (
 from custom_components.ocpp.const import (
     CONF_CSID,
     CONF_NUM_CONNECTORS,
+    DATA_UPDATED,
     DOMAIN as OCPP_DOMAIN,
 )
+from custom_components.ocpp.enums import HAChargerSession, HAChargerStatuses
 
 from .const import (
     MOCK_CONFIG_DATA,
@@ -63,6 +69,89 @@ async def test_central_system_has_diagnostic_sensor_without_chargers(
         "ocpp2.0.1",
         "ocpp2.1",
     ]
+
+    await remove_configuration(hass, config_entry)
+
+
+async def test_authorization_users_are_state_entities_on_server_device(
+    hass, socket_enabled, monkeypatch
+):
+    """Create one dynamic server entity per authorization user."""
+    data = {
+        **MOCK_CONFIG_DATA,
+        CONF_CSID: "test_user_status",
+        CONF_CPIDS: [],
+        CONF_PORT: 9061,
+    }
+    config_entry = MockConfigEntry(
+        domain=OCPP_DOMAIN,
+        data=data,
+        entry_id="test_user_status",
+        title="test_user_status",
+        version=2,
+        minor_version=1,
+    )
+    await create_configuration(hass, config_entry)
+    central = hass.data[OCPP_DOMAIN][config_entry.entry_id]
+
+    user_id = await central.authorization.async_add_user("Alessio")
+    await central.authorization.async_assign_token(user_id, "CARD-ONE", label="A250e")
+    await hass.async_block_till_done()
+
+    entity_id = "sensor.test_user_status_user_alessio"
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert state.state == "idle"
+    assert state.attributes["card_count"] == 1
+    assert state.attributes["cards"][0]["name"] == "A250e"
+    assert state.attributes["cards"][0]["identifier"] != "CARD-ONE"
+
+    entity_entry = er.async_get(hass).async_get(entity_id)
+    server_device = dr.async_get(hass).async_get_device({(OCPP_DOMAIN, central.id)})
+    assert entity_entry.device_id == server_device.id
+
+    central.charge_points["AUTEL_CP"] = SimpleNamespace(
+        settings=SimpleNamespace(cpid="autel"),
+        num_connectors=1,
+    )
+    metric_values = {
+        HAChargerSession.transaction_id.value: 42,
+        HAChargerStatuses.id_tag.value: "CARD-ONE",
+    }
+    monkeypatch.setattr(
+        central,
+        "get_metric",
+        lambda _cpid, metric, **_kwargs: metric_values.get(metric),
+    )
+    async_dispatcher_send(hass, DATA_UPDATED)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert state.state == "charging"
+    assert state.attributes["active_sessions"] == [
+        {
+            "charge_point": "autel",
+            "connector_id": 1,
+            "transaction_id": 42,
+            "card": "A250e",
+        }
+    ]
+
+    metric_values[HAChargerStatuses.id_tag.value] = "ISO14443:CARD-ONE"
+    async_dispatcher_send(hass, DATA_UPDATED)
+    await hass.async_block_till_done()
+    assert hass.states.get(entity_id).state == "charging"
+
+    await central.authorization.async_update_user(user_id, "Alessio", False)
+    await hass.async_block_till_done()
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert state.state == "disabled"
+
+    await central.authorization.async_delete_user(user_id)
+    await hass.async_block_till_done()
+    assert hass.states.get(entity_id) is None
 
     await remove_configuration(hass, config_entry)
 

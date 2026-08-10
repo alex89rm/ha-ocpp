@@ -18,6 +18,16 @@
             "learn_rfid": {
                 "name": "Apprendi RFID"
             }
+        },
+        "sensor": {
+            "authorization_user_status": {
+                "name": "Stato utente",
+                "state": {
+                    "idle": "Inattivo",
+                    "charging": "In carica",
+                    "disabled": "Disabilitato"
+                }
+            }
         }
     },
     "options": {

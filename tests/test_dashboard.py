@@ -4,7 +4,7 @@ import inspect
 import json
 
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 from homeassistant.components.number import (
     ATTR_VALUE,
@@ -28,9 +28,12 @@ from custom_components.ha_ocpp.const import (
     DOMAIN,
 )
 from custom_components.ha_ocpp.dashboard import (
+    PANEL_ICON,
+    PANEL_ICON_MODULE,
     WALLBOX_COMMAND_SCHEMA,
     _available_connector_actions,
     _authorization_snapshot,
+    async_setup_dashboard,
     dashboard_snapshot,
     websocket_wallbox_command,
 )
@@ -40,6 +43,41 @@ import voluptuous as vol
 
 
 RAW_TOKEN = "RFID-SECRET-123456"
+
+
+async def test_dashboard_registers_material_type2_icon(hass, monkeypatch):
+    """The global icon set is loaded before the panel uses its custom icon."""
+    register_static_paths = AsyncMock()
+    register_panel = AsyncMock()
+    add_extra_js_url = Mock()
+    register_command = Mock()
+    registration_order = Mock()
+    registration_order.attach_mock(add_extra_js_url, "add_icon_module")
+    registration_order.attach_mock(register_panel, "register_panel")
+    hass.http = SimpleNamespace(async_register_static_paths=register_static_paths)
+    monkeypatch.setattr(
+        "custom_components.ha_ocpp.dashboard.frontend.add_extra_js_url",
+        add_extra_js_url,
+    )
+    monkeypatch.setattr(
+        "custom_components.ha_ocpp.dashboard.panel_custom.async_register_panel",
+        register_panel,
+    )
+    monkeypatch.setattr(
+        "custom_components.ha_ocpp.dashboard.websocket_api.async_register_command",
+        register_command,
+    )
+
+    await async_setup_dashboard(hass)
+
+    register_static_paths.assert_awaited_once()
+    add_extra_js_url.assert_called_once_with(hass, PANEL_ICON_MODULE)
+    register_panel.assert_awaited_once()
+    assert register_panel.await_args.kwargs["sidebar_icon"] == PANEL_ICON
+    assert [item[0] for item in registration_order.mock_calls[:2]] == [
+        "add_icon_module",
+        "register_panel",
+    ]
 
 
 def _authorization_manager():

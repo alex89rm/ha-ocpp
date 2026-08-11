@@ -345,7 +345,7 @@ class HaOcppPanel extends HTMLElement {
       <style>${this._styles()}</style>
       <div class="app ${this._busy ? "busy" : ""}">
         <header>
-          <div class="brand"><ha-icon icon="mdi:ev-station"></ha-icon><span>HA OCPP</span></div>
+          <div class="brand"><ha-icon icon="ha-ocpp:type2"></ha-icon><span>HA OCPP</span></div>
         </header>
         <nav aria-label="HA OCPP">
           ${this._navItem("overview", "mdi:view-dashboard-outline", t.overview)}

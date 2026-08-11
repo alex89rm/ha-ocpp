@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from homeassistant.components import panel_custom, websocket_api
+from homeassistant.components import frontend, panel_custom, websocket_api
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.number import (
     ATTR_VALUE,
@@ -74,6 +74,8 @@ _LOGGER = logging.getLogger(__package__)
 PANEL_URL_PATH = "ha-ocpp"
 PANEL_STATIC_URL = "/ha_ocpp_static"
 PANEL_ELEMENT = "ha-ocpp-panel"
+PANEL_ICON = "ha-ocpp:type2"
+PANEL_ICON_MODULE = f"{PANEL_STATIC_URL}/ha-ocpp-icons.js"
 PANEL_REGISTERED = "dashboard_registered"
 PANEL_DIRECTORY = Path(__file__).parent / "frontend"
 
@@ -715,12 +717,13 @@ async def async_setup_dashboard(hass: HomeAssistant) -> None:
             )
         ]
     )
+    frontend.add_extra_js_url(hass, PANEL_ICON_MODULE)
     await panel_custom.async_register_panel(
         hass,
         frontend_url_path=PANEL_URL_PATH,
         webcomponent_name=PANEL_ELEMENT,
         sidebar_title="HA OCPP",
-        sidebar_icon="mdi:ev-station",
+        sidebar_icon=PANEL_ICON,
         module_url=f"{PANEL_STATIC_URL}/ha-ocpp-panel.js",
         require_admin=True,
         config_panel_domain=DOMAIN,

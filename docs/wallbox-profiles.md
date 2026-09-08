@@ -39,7 +39,7 @@ metadata; the verified Autel limit is sent by the generic OCPP 1.6 handler.
 | Profile | Match | Current behavior |
 | --- | --- | --- |
 | Generic OCPP | Fallback | Standards-first behavior; 0.5 V phase noise floor |
-| Autel MaxiCharger | Vendor `Autel*`, model `MaxiCharger*` | 1.0 V phase noise floor; product image; hardware-verified persistent station-wide power limit |
+| Autel MaxiCharger | Vendor `Autel*`, model `MaxiCharger*` | 1.0 V voltage and 0.1 A current phase noise floors; product image; hardware-verified persistent station-wide power limit |
 
 The Autel limit was verified on a MaxiCharger AC with
 `ChargePointMaxProfile`, `Absolute`, `W`, and connector `0`. A Fluke 87

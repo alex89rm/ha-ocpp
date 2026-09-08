@@ -39,6 +39,7 @@ def test_unknown_wallbox_uses_generic_profile():
     profile = select_profile(WallboxIdentity(vendor="Acme", model="Model X"))
 
     assert profile.profile_id == GENERIC_PROFILE_ID
+    assert profile.normalize_measurand_value("Current.Import", 0.011, "L2") == 0.011
 
 
 def test_manual_profile_override_wins_over_detection():
@@ -53,13 +54,15 @@ def test_manual_profile_override_wins_over_detection():
     )
 
 
-def test_autel_profile_removes_inactive_phase_voltage_noise():
+def test_autel_profile_removes_inactive_phase_meter_noise():
     """Autel's non-zero inactive phases are normalized before aggregation."""
     profile = get_profile("autel.maxicharger")
 
     assert profile is not None
     assert profile.normalize_measurand_value("Voltage", 0.05, "L2-N") == 0.0
     assert profile.normalize_measurand_value("Voltage", 243.0, "L1-N") == 243.0
+    assert profile.normalize_measurand_value("Current.Import", 0.011, "L2") == 0.0
+    assert profile.normalize_measurand_value("Current.Import", 15.942, "L1") == 15.942
 
 
 def test_profile_catalog_is_safe_for_frontend_clients():

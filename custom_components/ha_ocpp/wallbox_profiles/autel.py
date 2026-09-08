@@ -11,6 +11,7 @@ AUTEL_MAXICHARGER_PROFILE = WallboxProfile(
     model_patterns=("maxicharger*",),
     priority=200,
     voltage_noise_floor=1.0,
+    current_noise_floor=0.1,
     charging_limit_strategy="charge_point_max_profile_absolute",
     capability_hints=(
         "station_wide_power_limit",

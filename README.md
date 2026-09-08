@@ -28,8 +28,8 @@ package.
 - Separate current limits for every connector on multi-connector stations.
 
 The Autel MaxiCharger AC profile includes hardware-verified handling for its
-phase-voltage noise floor and for persistent station-wide power limits using
-`ChargePointMaxProfile`, `Absolute`, `W`, and connector `0`.
+inactive-phase voltage and current noise floors and for persistent station-wide
+power limits using `ChargePointMaxProfile`, `Absolute`, `W`, and connector `0`.
 
 ## Installation
 

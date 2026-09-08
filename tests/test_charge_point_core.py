@@ -31,6 +31,7 @@ from custom_components.ha_ocpp.enums import (
     HAChargerDetails as cdet,
     HAChargerSession as csess,
 )
+from custom_components.ha_ocpp.wallbox_profiles import get_profile
 from ocpp.messages import CallError
 from ocpp.charge_point import ChargePoint as LibCP
 from ocpp.exceptions import NotImplementedError as OcppNotImplementedError
@@ -325,6 +326,25 @@ def test_process_phases_ignores_subvolt_voltage_noise(hass, phase_values, expect
     cp.process_phases(bucket, connector_id=1)
 
     assert cp._metrics[(1, "Voltage")].value == pytest.approx(expected)
+
+
+def test_process_phases_ignores_autel_inactive_phase_current_noise(hass):
+    """Autel residual current must not divide a single active phase by three."""
+    cp = _mk_cp(hass)
+    cp.wallbox_profile = get_profile("autel.maxicharger")
+    bucket = [
+        _mv("Current.Import", 15.942, phase="L1", unit="A"),
+        _mv("Current.Import", 0.010, phase="L2", unit="A"),
+        _mv("Current.Import", 0.011, phase="L3", unit="A"),
+    ]
+
+    cp.process_phases(bucket, connector_id=1)
+
+    metric = cp._metrics[(1, "Current.Import")]
+    assert metric.value == pytest.approx(15.942)
+    assert metric.extra_attr["L1"] == pytest.approx(15.942)
+    assert metric.extra_attr["L2"] == 0.0
+    assert metric.extra_attr["L3"] == 0.0
 
 
 def test_get_energy_kwh_and_session_derive(hass):

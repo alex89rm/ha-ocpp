@@ -47,6 +47,7 @@ class WallboxProfile:
     model_patterns: tuple[str, ...] = ()
     priority: int = 0
     voltage_noise_floor: float = 0.5
+    current_noise_floor: float = 0.0
     charging_limit_strategy: str = "standard"
     capability_hints: tuple[str, ...] = ()
     product_image: str | None = None
@@ -94,6 +95,17 @@ class WallboxProfile:
             and abs(value) < self.voltage_noise_floor
         ):
             return 0.0
+        if (
+            measurand
+            in (
+                Measurand.current_export.value,
+                Measurand.current_import.value,
+                Measurand.current_offered.value,
+            )
+            and phase is not None
+            and abs(value) < self.current_noise_floor
+        ):
+            return 0.0
         return value
 
     def as_dict(self) -> dict[str, object]:
@@ -105,6 +117,7 @@ class WallboxProfile:
             "product_family": self.product_family,
             "charging_limit_strategy": self.charging_limit_strategy,
             "voltage_noise_floor": self.voltage_noise_floor,
+            "current_noise_floor": self.current_noise_floor,
             "capability_hints": list(self.capability_hints),
             "product_image": self.product_image,
             "hardware_verified": self.hardware_verified,
